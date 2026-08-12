@@ -2,6 +2,26 @@
 
 Editor de video mínimo con interfaz gráfica para ensamblar videos verticales y horizontales a partir de: clips pregrabados reutilizables + footage nuevo + voz + música de fondo. Corre 100% en el navegador (sin backend, sin subir archivos a ningún servidor), con un CLI de render nativo para el trabajo pesado.
 
+## 🤖 Para agentes de IA — léeme primero
+
+Si eres una IA (Claude Code, Copilot, etc.) y te pasaron este repo, esto es todo lo que necesitas para trabajar aquí sin explorar a ciegas:
+
+**Qué es esto.** Una herramienta personal de edición de video con dos mitades que hablan el mismo idioma: una GUI web (React) donde el usuario edita visualmente, y un CLI (`cli/render.ts`) que renderiza con ffmpeg nativo. El idioma común es el **manifiesto**: un JSON que describe el video completo.
+
+**Lee estos archivos, en este orden:**
+1. [`manifiesto.md`](manifiesto.md) — especificación completa del manifiesto: cada campo, semántica de tiempos (crítica: todos los tiempos son segundos del archivo fuente), y una guía de tareas comunes con ejemplos. **Léelo antes de crear o editar cualquier manifiesto.**
+2. `src/lib/graph.ts` — la fuente de verdad: traduce el manifiesto a argumentos de ffmpeg. GUI y CLI lo comparten; lo que haga este archivo ES el comportamiento del render.
+3. `cli/render.ts` — el renderizador de terminal (resolución de archivos, ffprobe, progreso).
+
+**Lo que el usuario típicamente te pedirá:**
+- Crear o editar un manifiesto a partir de instrucciones en lenguaje natural («córtale la voz del 1:23 al 1:34», «acelera el clip 2») → edita el JSON según `manifiesto.md`.
+- Renderizarlo: `node cli/render.ts manifiesto.json --base <carpeta-de-medios> [--out <salida>]`. Requiere Node ≥ 22.18 y `ffmpeg`/`ffprobe` en el PATH. En macOS usa VideoToolbox por defecto (rápido); **nunca sugieras el render del navegador para material 4K o videos largos**.
+- En la máquina del autor, el material vive en `~/Documents/Videos` (clips reutilizables en `ayuda/`, proyectos en carpetas numeradas con su nota de voz `untitled.wav`).
+
+**Comandos del proyecto:** `npm install` · `npm run dev` (editor en local) · `npm run build` (typecheck + bundle, verifica esto tras cambios) · `npm run lint`.
+
+**Principio rector que debes respetar:** este proyecto es deliberadamente mínimo y NO se itera constantemente. No agregues funcionalidades, dependencias ni refactors que el usuario no pidió. Si algo grande parece buena idea, propónlo — no lo implementes.
+
 ## Principio rector: solo lo básico
 
 Este proyecto **no está pensado para iterarse constantemente**. Se construye una vez, se usa, y solo recibe ajustes puntuales cuando algo realmente lo justifique. Si en el futuro se le quiere agregar algo grande (transiciones, subtítulos automáticos, etc.), eso es un proyecto nuevo, no un parche a este.
