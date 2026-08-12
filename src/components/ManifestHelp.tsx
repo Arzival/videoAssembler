@@ -47,6 +47,26 @@ export function ManifestHelp({ onClose }: Props) {
             </li>
           </ul>
 
+          <h4>📂 Cómo funciona la carpeta conectada</h4>
+          <ul>
+            <li>
+              La búsqueda es <strong>recursiva</strong>: los archivos pueden estar en cualquier subcarpeta.
+            </li>
+            <li>
+              El emparejamiento es por <strong>nombre exacto de archivo</strong>. Si hay varios archivos con el
+              mismo nombre en subcarpetas distintas (ej. varios <code>untitled.wav</code>), se usa el primero que
+              se encuentre — dale nombre propio a cada nota de voz para evitar sorpresas.
+            </li>
+            <li>
+              La conexión sobrevive al cierre del navegador; en cada sesión nueva solo pedirá un clic de
+              confirmación (banner azul «Cargar archivos») la primera vez que la use.
+            </li>
+            <li>
+              Disponible en navegadores Chromium (Opera, Chrome, Edge). En Safari/Firefox el botón no aparece y
+              los archivos se agregan a mano (se emparejan por nombre igual).
+            </li>
+          </ul>
+
           <h4>Así se ve por dentro</h4>
           <pre className="modal-code">{`{
   "name": "mi-video",

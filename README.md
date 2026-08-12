@@ -48,7 +48,7 @@ npm run dev        # abre la interfaz en local
 npm run build      # genera dist/ para Cloudflare Pages
 ```
 
-1. Conecta tu carpeta de medios con «📂 Conectar carpeta» (una sola vez): al abrir manifiestos, los archivos se cargan solos por nombre. Luego agrega clips (se ensamblan en orden; arrastra para reordenar).
+1. Conecta tu carpeta de medios con «📂 Conectar carpeta» (una sola vez): al abrir manifiestos, los archivos se cargan solos. La búsqueda es recursiva (subcarpetas incluidas) y empareja por nombre exacto de archivo — si hay nombres duplicados usa el primero que encuentre. La conexión persiste entre sesiones (solo pide un clic de confirmación por sesión) y requiere navegador Chromium. Luego agrega clips (se ensamblan en orden; arrastra para reordenar).
 2. Por clip: recorte inicio/fin, velocidad (0.5×–2×), conservar o no el audio del clip con su volumen.
 3. Carga voz (WAV/MP3) y música, cada una con recorte y volumen.
 4. Elige formato: vertical (1080×1920), horizontal (1920×1080) o ambos.

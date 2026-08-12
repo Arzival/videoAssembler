@@ -92,7 +92,8 @@ Un manifiesto es un archivo **JSON** que describe la receta completa de un video
 
 El manifiesto guarda nombres/rutas; cada entorno los resuelve distinto:
 
-- **Editor web**: empareja por **nombre de archivo** (basename). Al abrir un manifiesto, si el archivo ya está en la biblioteca se reconecta solo; si no, queda marcado como faltante hasta que el usuario lo agregue.
+- **Editor web**: empareja por **nombre de archivo** (basename). Al abrir un manifiesto, si el archivo ya está en la biblioteca se reconecta solo; si no, queda marcado como faltante hasta que el usuario lo agregue. Con la **carpeta de medios conectada** (botón «📂 Conectar carpeta», navegadores Chromium), los archivos faltantes se buscan recursivamente en esa carpeta y se cargan sin intervención.
+- **Advertencia para IA al escribir manifiestos**: como el emparejamiento es por nombre de archivo, evita referenciar nombres que existan repetidos en varias subcarpetas (ej. `untitled.wav` aparece en muchas carpetas de proyecto del autor) — tanto la web como el CLI tomarán el primero que encuentren. Si el nombre es ambiguo, usa la ruta relativa (`20/untitled.wav`) para el CLI y avisa al usuario que en la web debe verificar que cargó el correcto.
 - **CLI**: primero intenta la ruta tal cual relativa a `--base`; si no existe, **busca recursivamente por nombre** bajo `--base` y usa la primera coincidencia (avisa si hay duplicadas). Rutas absolutas también funcionan.
 - Recomendación al escribir manifiestos: usa solo el nombre del archivo (`IMG_3360.mov`) y deja que `--base` haga el trabajo.
 
