@@ -12,9 +12,11 @@ interface Props {
   playhead: number
   onPlayhead: (t: number) => void
   onClipChange: (id: string, patch: Partial<ClipState>) => void
+  /** App registra aquí el control de reproducción (barra espaciadora) */
+  playerRef: React.MutableRefObject<{ toggle: () => void } | null>
 }
 
-export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlayhead, onClipChange }: Props) {
+export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlayhead, onClipChange, playerRef }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const voiceRef = useRef<HTMLAudioElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
@@ -64,7 +66,7 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
       }
     }
     v.addEventListener('timeupdate', onTime)
-    void v.play()
+    v.play().catch(() => {}) // pausa inmediata: no es error
   }
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
       if (src == null) continue // la pista ya terminó antes de este punto
       el.currentTime = src
       el.volume = Math.min(1, track.volume)
-      void el.play()
+      el.play().catch(() => {})
     }
   }
 
@@ -113,6 +115,8 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
     startAudioAt(from)
     setSeq(hit?.index ?? 0)
   }
+
+  playerRef.current = { toggle: () => (seq != null ? stopAll() : playAll()) }
 
   const playSegment = () => {
     const target = active

@@ -5,6 +5,7 @@ import type { BinItem, ClipState, Selection, TrackState } from './state.ts'
 import {
   baseName,
   binPlaceholder,
+  buildManifest,
   clipAt,
   clipFromBin,
   clipFromSpec,
@@ -31,10 +32,40 @@ export default function App() {
   const [outputs, setOutputs] = useState<OutputFormat[]>(['vertical'])
   const [selection, setSelection] = useState<Selection>(null)
   const [playhead, setPlayhead] = useState(0)
+  const [restored, setRestored] = useState(false)
 
   // instantánea para los atajos de teclado (el listener vive fuera del ciclo de render)
   const snap = useRef({ clips, voice, music, selection, playhead })
   snap.current = { clips, voice, music, selection, playhead }
+
+  // ---- deshacer ----
+
+  interface HistoryEntry {
+    clips: ClipState[]
+    voice: TrackState | null
+    music: TrackState | null
+    selection: Selection
+  }
+  const history = useRef<HistoryEntry[]>([])
+
+  /** Guarda el estado actual antes de una operación destructiva */
+  const pushHistory = () => {
+    const { clips, voice, music, selection } = snap.current
+    history.current.push({ clips, voice, music, selection })
+    if (history.current.length > 50) history.current.shift()
+  }
+
+  const undo = () => {
+    const prev = history.current.pop()
+    if (!prev) return
+    setClips(prev.clips)
+    setVoice(prev.voice)
+    setMusic(prev.music)
+    setSelection(prev.selection)
+  }
+
+  // controles del preview, registrados por PreviewPane (para la barra espaciadora)
+  const playerRef = useRef<{ toggle: () => void } | null>(null)
 
   // ---- biblioteca de archivos ----
 
@@ -90,6 +121,7 @@ export default function App() {
   }
 
   const removeBinItem = (item: BinItem) => {
+    pushHistory()
     setBin((prev) => prev.filter((b) => b.id !== item.id))
     setClips((prev) => prev.filter((c) => !(item.url ? c.url === item.url : baseName(c.file) === item.name)))
     const clearTrack = (t: TrackState | null) =>
@@ -103,17 +135,20 @@ export default function App() {
   // ---- línea de tiempo ----
 
   const addToTimeline = (item: BinItem) => {
+    pushHistory()
     const c = clipFromBin(item)
     setClips((prev) => [...prev, c])
     setSelection({ type: 'clip', id: c.id })
   }
 
   const assignVoice = (item: BinItem) => {
+    pushHistory()
     setVoice(trackFromBin(item, voice?.volume ?? 1))
     setSelection({ type: 'voice', segment: 0 })
   }
 
   const assignMusic = (item: BinItem) => {
+    pushHistory()
     setMusic(trackFromBin(item, music?.volume ?? 0.15))
     setSelection({ type: 'music', segment: 0 })
   }
@@ -122,17 +157,20 @@ export default function App() {
     setClips((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)))
 
   const removeClip = (id: string) => {
+    pushHistory()
     setClips((prev) => prev.filter((c) => c.id !== id))
     setSelection(null)
   }
 
-  const duplicateClip = (id: string) =>
+  const duplicateClip = (id: string) => {
+    pushHistory()
     setClips((prev) => {
       const i = prev.findIndex((c) => c.id === id)
       if (i < 0) return prev
       const copy = { ...prev[i], id: newId() }
       return [...prev.slice(0, i + 1), copy, ...prev.slice(i + 1)]
     })
+  }
 
   const moveClip = (from: number, to: number) =>
     setClips((prev) => {
@@ -147,6 +185,7 @@ export default function App() {
 
   const splitAtPlayhead = () => {
     const { clips, voice, music, selection, playhead } = snap.current
+    pushHistory()
 
     if (selection?.type === 'voice' || selection?.type === 'music') {
       const track = selection.type === 'voice' ? voice : music
@@ -186,6 +225,7 @@ export default function App() {
   const deleteSelected = () => {
     const { voice, music, selection } = snap.current
     if (!selection) return
+    if (selection.type !== 'clip') pushHistory() // el camino de clip ya la guarda en removeClip
     if (selection.type === 'clip') {
       removeClip(selection.id)
       return
@@ -217,12 +257,23 @@ export default function App() {
       const tgt = e.target as HTMLElement
       if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable) return
       if (document.querySelector('.modal-overlay')) return // no editar con un modal abierto
-      if (e.key === 's' || e.key === 'S') {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        undo()
+      } else if (e.key === 's' || e.key === 'S') {
         e.preventDefault()
         splitAtPlayhead()
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault()
         deleteSelected()
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        playerRef.current?.toggle()
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault()
+        const step = (e.shiftKey ? 1 : 0.1) * (e.key === 'ArrowLeft' ? -1 : 1)
+        const total = snap.current.clips.reduce((s, c) => s + clipOutSeconds(c), 0)
+        setPlayhead((p) => Math.min(total, Math.max(0, Math.round((p + step) * 10) / 10)))
       }
     }
     window.addEventListener('keydown', onKey)
@@ -277,6 +328,50 @@ export default function App() {
     setPlayhead(0)
   }
 
+  // ---- autoguardado en el navegador ----
+
+  const AUTOSAVE_KEY = 'videassembler-autosave'
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(AUTOSAVE_KEY)
+      if (!raw) return
+      const m = JSON.parse(raw) as Manifest
+      if (Array.isArray(m.clips) && (m.clips.length > 0 || m.voice || m.music)) {
+        loadManifest(m)
+        setRestored(true)
+      }
+    } catch {
+      localStorage.removeItem(AUTOSAVE_KEY)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      if (clips.length === 0 && !voice && !music) localStorage.removeItem(AUTOSAVE_KEY)
+      else localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(buildManifest(name, clips, voice, music, outputs)))
+    }, 400)
+    return () => clearTimeout(id)
+  }, [clips, voice, music, name, outputs])
+
+  const resetProject = () => {
+    localStorage.removeItem(AUTOSAVE_KEY)
+    history.current = []
+    setBin((prev) => {
+      prev.forEach((b) => b.url && URL.revokeObjectURL(b.url))
+      return []
+    })
+    setClips([])
+    setVoice(null)
+    setMusic(null)
+    setSelection(null)
+    setPlayhead(0)
+    setName('mi-video')
+    setOutputs(['vertical'])
+    setRestored(false)
+  }
+
   // ---- derivados ----
 
   const totalDuration = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
@@ -308,6 +403,13 @@ export default function App() {
         onLoadManifest={loadManifest}
       />
 
+      {restored && (
+        <div className="banner banner-info">
+          💾 Proyecto recuperado del autoguardado — agrega los archivos en «Archivos» para reconectarlos.
+          <button className="small" onClick={() => setRestored(false)}>Entendido</button>
+          <button className="small danger" onClick={resetProject}>Empezar de cero</button>
+        </div>
+      )}
       {(missing.length > 0 || totalBytes > 800 * 1024 * 1024 || has4k) && (
         <div className="banner">
           {missing.length > 0 && <span>⚠ Faltan archivos: {missing.join(', ')} — agrégalos en «Archivos». </span>}
@@ -338,6 +440,7 @@ export default function App() {
           playhead={playhead}
           onPlayhead={setPlayhead}
           onClipChange={updateClip}
+          playerRef={playerRef}
         />
         {selClip ? (
           <Inspector

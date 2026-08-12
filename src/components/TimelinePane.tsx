@@ -97,7 +97,10 @@ export function TimelinePane({
           {clips.length} clip{clips.length === 1 ? '' : 's'} · total {formatTime(totalDuration)}
           {totalMB > 0 && ` · ${totalMB} MB`}
         </span>
-        <span className="tl-keys">clic = cursor · <kbd>S</kbd> = cortar · <kbd>⌫</kbd> = borrar selección</span>
+        <span className="tl-keys">
+          clic = cursor · <kbd>espacio</kbd> = play/pausa · <kbd>S</kbd> = cortar · <kbd>⌫</kbd> = borrar ·{' '}
+          <kbd>←→</kbd> = afinar cursor (Shift = 1s) · <kbd>⌘Z</kbd> = deshacer
+        </span>
       </div>
 
       <div className="tl-body" ref={bodyRef} onPointerDown={(e) => scrubFrom(e, false)}>
