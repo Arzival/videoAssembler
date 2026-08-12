@@ -17,6 +17,16 @@ import {
   trackFromSpec,
   trackSegments,
 } from './state.ts'
+import type { DirHandle } from './lib/mediaFolder.ts'
+import {
+  findFilesByName,
+  folderPermission,
+  loadFolderHandle,
+  pickFolder,
+  requestFolderPermission,
+  saveFolderHandle,
+  supportsFolders,
+} from './lib/mediaFolder.ts'
 import { TopBar } from './components/TopBar.tsx'
 import { MediaBin } from './components/MediaBin.tsx'
 import { PreviewPane } from './components/PreviewPane.tsx'
@@ -33,6 +43,10 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>(null)
   const [playhead, setPlayhead] = useState(0)
   const [restored, setRestored] = useState(false)
+  const [folder, setFolder] = useState<DirHandle | null>(null)
+  const [folderPrompt, setFolderPrompt] = useState(false)
+  const folderRef = useRef<DirHandle | null>(null)
+  folderRef.current = folder
 
   // instantánea para los atajos de teclado (el listener vive fuera del ciclo de render)
   const snap = useRef({ clips, voice, music, selection, playhead })
@@ -69,8 +83,8 @@ export default function App() {
 
   // ---- biblioteca de archivos ----
 
-  const addFiles = (list: FileList | null) => {
-    if (!list?.length) return
+  const addFiles = (list: FileList | File[] | null) => {
+    if (!list || list.length === 0) return
     const prepared = Array.from(list).map((file) => ({
       file,
       url: URL.createObjectURL(file),
@@ -119,6 +133,52 @@ export default function App() {
       })
     }
   }
+
+  /** Nombres de archivo que el proyecto necesita y aún no tienen File asignado */
+  const missingNames = (): string[] => {
+    const { clips, voice, music } = snap.current
+    return [
+      ...clips.filter((c) => !c.media).map((c) => baseName(c.file)),
+      ...(voice && !voice.media ? [baseName(voice.file)] : []),
+      ...(music && !music.media ? [baseName(music.file)] : []),
+    ].filter((v, i, arr) => arr.indexOf(v) === i)
+  }
+
+  const resolving = useRef(false)
+
+  /** Busca en la carpeta conectada los archivos faltantes y los carga solos */
+  const resolveFromFolder = async (names?: string[]) => {
+    const handle = folderRef.current
+    if (!handle || resolving.current) return
+    const wanted = names ?? missingNames()
+    if (wanted.length === 0) return
+    resolving.current = true
+    try {
+      if ((await folderPermission(handle)) !== 'granted') {
+        setFolderPrompt(true)
+        return
+      }
+      const files = await findFilesByName(handle, wanted)
+      if (files.length > 0) addFiles(files)
+      setFolderPrompt(false)
+    } finally {
+      resolving.current = false
+    }
+  }
+
+  const connectFolder = async () => {
+    const handle = await pickFolder()
+    if (!handle) return
+    await saveFolderHandle(handle)
+    setFolder(handle)
+    setFolderPrompt(false)
+    void resolveFromFolder()
+  }
+
+  // al arrancar, recupera la carpeta conectada en sesiones anteriores
+  useEffect(() => {
+    void loadFolderHandle().then((h) => h && setFolder(h))
+  }, [])
 
   const removeBinItem = (item: BinItem) => {
     pushHistory()
@@ -326,6 +386,8 @@ export default function App() {
     setMusic(m.music ? loadTrack(m.music) : null)
     setSelection(null)
     setPlayhead(0)
+    // si hay carpeta conectada, carga los archivos referenciados sin intervención
+    setTimeout(() => void resolveFromFolder(refs.map((r) => r.name)), 0)
   }
 
   // ---- autoguardado en el navegador ----
@@ -385,6 +447,12 @@ export default function App() {
     ...(music && !music.media ? [baseName(music.file)] : []),
   ].filter((v, i, arr) => arr.indexOf(v) === i)
 
+  // la carpeta puede conectarse después de restaurar el autosave: intenta resolver faltantes
+  useEffect(() => {
+    if (folder && missing.length > 0) void resolveFromFolder()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folder, missing.length])
+
   const selClipIndex = selection?.type === 'clip' ? clips.findIndex((c) => c.id === selection.id) : -1
   const selClip = selClipIndex >= 0 ? clips[selClipIndex] : null
   const scrub = clipAt(clips, playhead)
@@ -403,6 +471,22 @@ export default function App() {
         onLoadManifest={loadManifest}
       />
 
+      {folderPrompt && missing.length > 0 && folder && (
+        <div className="banner banner-info">
+          📂 Carpeta «{folder.name}» conectada — el navegador pide tu clic para leer los archivos.
+          <button
+            className="small primary"
+            onClick={async () => {
+              if (await requestFolderPermission(folder)) {
+                setFolderPrompt(false)
+                void resolveFromFolder()
+              }
+            }}
+          >
+            Cargar archivos
+          </button>
+        </div>
+      )}
       {restored && (
         <div className="banner banner-info">
           💾 Proyecto recuperado del autoguardado — agrega los archivos en «Archivos» para reconectarlos.
@@ -425,6 +509,9 @@ export default function App() {
       <main className="workspace">
         <MediaBin
           items={bin}
+          folderName={folder?.name ?? null}
+          canConnectFolder={supportsFolders()}
+          onConnectFolder={() => void connectFolder()}
           onAddFiles={addFiles}
           onAddToTimeline={addToTimeline}
           onAssignVoice={assignVoice}

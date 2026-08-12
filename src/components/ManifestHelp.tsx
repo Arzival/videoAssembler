@@ -40,6 +40,11 @@ export function ManifestHelp({ onClose }: Props) {
               <strong>Abrir manifiesto</strong> reconstruye todo el proyecto. Los archivos se reconectan por
               nombre: si ya están en «Archivos» se enlazan solos; si no, agrégalos y se emparejan automáticamente.
             </li>
+            <li>
+              <strong>📂 Conectar carpeta</strong> (panel «Archivos»): conecta tu carpeta de videos una sola vez
+              y al abrir cualquier manifiesto los archivos se cargan <em>solos</em>, sin re-seleccionarlos. Ideal
+              para abrir manifiestos creados por una IA.
+            </li>
           </ul>
 
           <h4>Así se ve por dentro</h4>

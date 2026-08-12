@@ -3,6 +3,9 @@ import { formatTime } from '../state.ts'
 
 interface Props {
   items: BinItem[]
+  folderName: string | null
+  canConnectFolder: boolean
+  onConnectFolder: () => void
   onAddFiles: (files: FileList | null) => void
   onAddToTimeline: (item: BinItem) => void
   onAssignVoice: (item: BinItem) => void
@@ -10,7 +13,7 @@ interface Props {
   onRemove: (item: BinItem) => void
 }
 
-export function MediaBin({ items, onAddFiles, onAddToTimeline, onAssignVoice, onAssignMusic, onRemove }: Props) {
+export function MediaBin({ items, folderName, canConnectFolder, onConnectFolder, onAddFiles, onAddToTimeline, onAssignVoice, onAssignMusic, onRemove }: Props) {
   return (
     <aside className="media-bin">
       <div className="panel-head">
@@ -28,6 +31,19 @@ export function MediaBin({ items, onAddFiles, onAddToTimeline, onAssignVoice, on
           />
         </label>
       </div>
+      {canConnectFolder && (
+        <button
+          className="small folder-btn"
+          onClick={onConnectFolder}
+          title={
+            folderName
+              ? `Carpeta conectada: al abrir un manifiesto, los archivos se cargan solos desde «${folderName}». Clic para cambiarla.`
+              : 'Conecta tu carpeta de videos: al abrir un manifiesto, los archivos se cargarán solos'
+          }
+        >
+          📂 {folderName ? `${folderName} ✓` : 'Conectar carpeta…'}
+        </button>
+      )}
       {items.length === 0 && (
         <p className="hint">Agrega tus videos y audios aquí. Luego mándalos a la línea de tiempo o asígnalos como voz/música.</p>
       )}
