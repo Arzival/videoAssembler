@@ -1,5 +1,12 @@
-import type { ClipState, TrackState } from '../state.ts'
+import type { OverlayPosition } from '../lib/types.ts'
+import type { ClipState, OverlayState, TrackState } from '../state.ts'
 import { clipOutSeconds, formatTime } from '../state.ts'
+
+const POSITIONS: OverlayPosition[] = [
+  'top-left', 'top', 'top-right',
+  'left', 'center', 'right',
+  'bottom-left', 'bottom', 'bottom-right',
+]
 
 interface ClipProps {
   kind: 'clip'
@@ -19,7 +26,15 @@ interface TrackProps {
   onRemove: () => void
 }
 
-type Props = ClipProps | TrackProps | { kind: 'none' }
+interface OverlayProps {
+  kind: 'overlay'
+  overlay: OverlayState
+  playhead: number
+  onChange: (patch: Partial<OverlayState>) => void
+  onRemove: () => void
+}
+
+type Props = ClipProps | TrackProps | OverlayProps | { kind: 'none' }
 
 export function Inspector(props: Props) {
   if (props.kind === 'none') {
@@ -92,6 +107,88 @@ export function Inspector(props: Props) {
           <button onClick={() => onMove(1)} disabled={index === count - 1} title="Mover a la derecha">→</button>
           <button onClick={onDuplicate} title="Duplicar clip">⧉ Duplicar</button>
           <button className="danger" onClick={onRemove} title="Quitar de la línea de tiempo">✕ Quitar</button>
+        </div>
+      </aside>
+    )
+  }
+
+  if (props.kind === 'overlay') {
+    const { overlay, playhead, onChange, onRemove } = props
+    const dur = overlay.end - overlay.start
+    return (
+      <aside className="inspector">
+        <div className="panel-head"><h2>Capa</h2></div>
+        <div className="insp-file" title={overlay.file}>{overlay.file}</div>
+        <div className="insp-meta">
+          aparece {formatTime(overlay.start)} → {formatTime(overlay.end)} · {dur.toFixed(1)}s
+        </div>
+        {!overlay.media && <p className="missing">Falta el archivo — agrégalo en «Archivos»</p>}
+        <div className="insp-controls">
+          <label className="num-row">
+            Aparece en (s)
+            <span className="num-inputs">
+              <input
+                type="number"
+                min={0}
+                step={0.1}
+                value={Math.round(overlay.start * 10) / 10}
+                onChange={(e) => {
+                  const v = Math.max(0, Number(e.target.value) || 0)
+                  onChange({ start: v, end: v + dur })
+                }}
+              />
+              <button className="small" onClick={() => onChange({ start: playhead, end: playhead + dur })} title="Usar la posición del cursor rojo">
+                ⟵ al cursor
+              </button>
+            </span>
+          </label>
+          <label className="num-row">
+            Duración (s)
+            <input
+              type="number"
+              min={0.2}
+              step={0.1}
+              value={Math.round(dur * 10) / 10}
+              onChange={(e) => onChange({ end: overlay.start + Math.max(0.2, Number(e.target.value) || 0.2) })}
+            />
+          </label>
+          <label className="num-row">
+            Desde el seg. del archivo
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              value={Math.round(overlay.trimIn * 10) / 10}
+              onChange={(e) => onChange({ trimIn: Math.max(0, Number(e.target.value) || 0) })}
+            />
+          </label>
+          <label>
+            Tamaño <span className="val">{Math.round(overlay.scale * 100)}% del ancho</span>
+            <input
+              type="range"
+              min={0.15}
+              max={0.8}
+              step={0.01}
+              value={overlay.scale}
+              onChange={(e) => onChange({ scale: Number(e.target.value) })}
+            />
+          </label>
+          <div className="pos-grid-wrap">
+            <span className="cut-label">Posición</span>
+            <div className="pos-grid">
+              {POSITIONS.map((pos) => (
+                <button
+                  key={pos}
+                  className={`pos-cell${overlay.position === pos ? ' active' : ''}`}
+                  onClick={() => onChange({ position: pos })}
+                  title={pos}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="insp-buttons">
+          <button className="danger" onClick={onRemove}>✕ Quitar capa</button>
         </div>
       </aside>
     )

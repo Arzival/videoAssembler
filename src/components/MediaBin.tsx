@@ -8,12 +8,13 @@ interface Props {
   onConnectFolder: () => void
   onAddFiles: (files: FileList | null) => void
   onAddToTimeline: (item: BinItem) => void
+  onAddOverlay: (item: BinItem) => void
   onAssignVoice: (item: BinItem) => void
   onAssignMusic: (item: BinItem) => void
   onRemove: (item: BinItem) => void
 }
 
-export function MediaBin({ items, folderName, canConnectFolder, onConnectFolder, onAddFiles, onAddToTimeline, onAssignVoice, onAssignMusic, onRemove }: Props) {
+export function MediaBin({ items, folderName, canConnectFolder, onConnectFolder, onAddFiles, onAddToTimeline, onAddOverlay, onAssignVoice, onAssignMusic, onRemove }: Props) {
   return (
     <aside className="media-bin">
       <div className="panel-head">
@@ -66,9 +67,14 @@ export function MediaBin({ items, folderName, canConnectFolder, onConnectFolder,
               </span>
               <div className="bin-actions">
                 {item.kind === 'video' ? (
-                  <button className="small" disabled={!item.media} onClick={() => onAddToTimeline(item)} title="Agregar a la línea de tiempo">
-                    + Timeline
-                  </button>
+                  <>
+                    <button className="small" disabled={!item.media} onClick={() => onAddToTimeline(item)} title="Agregar a la línea de tiempo">
+                      + Timeline
+                    </button>
+                    <button className="small" disabled={!item.media} onClick={() => onAddOverlay(item)} title="Agregar como capa encima del video, en la posición del cursor">
+                      + Capa
+                    </button>
+                  </>
                 ) : (
                   <>
                     <button className="small" disabled={!item.media} onClick={() => onAssignVoice(item)} title="Usar como pista de voz">

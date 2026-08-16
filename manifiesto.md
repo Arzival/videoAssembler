@@ -71,6 +71,30 @@ Un manifiesto es un archivo **JSON** que describe la receta completa de un video
 | `volume` | número | 1.0 | Volumen (0–2). Recomendado 0.10–0.20 para música de fondo. |
 | `cuts` | array de `{from, to}` | `[]` | Rangos internos a eliminar, ver §3. |
 
+### Capa superpuesta (overlays, opcional)
+
+Videos que aparecen **encima** del video principal durante un rango (picture-in-picture, B-roll chico, logos animados). Van en el array raíz `overlays`:
+
+```json
+"overlays": [
+  { "file": "logo.mov", "start": 3, "end": 8, "trimIn": 0, "scale": 0.35, "position": "top-right" }
+]
+```
+
+| Campo | Tipo | Default | Descripción |
+|---|---|---|---|
+| `file` | string | — | Video de la capa (se resuelve igual que los clips). |
+| `start` / `end` | número (seg) | — | **Segundos del VIDEO FINAL** (no del archivo) donde aparece y desaparece. Ojo: es el único lugar del manifiesto donde los tiempos son del video final. |
+| `trimIn` | número (seg) | 0 | Desde qué segundo del archivo fuente se toma la capa. |
+| `scale` | número | 0.35 | Ancho de la capa como fracción del ancho de salida (0.15–0.8). |
+| `position` | string | top-right | Una de: `top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right` (margen 3%). |
+
+- Las capas se dibujan en el orden del array (la última queda encima).
+- El audio de la capa **se descarta siempre**.
+- Si el archivo de la capa es más corto que `end - start`, la capa desaparece cuando el archivo se acaba.
+- Las capas no alargan el video; `end` más allá de la duración total simplemente se corta ahí.
+- Capas de **texto**: aún no soportadas (pendiente de un ffmpeg con drawtext; ver README).
+
 ## 3. Semántica de tiempos (LO MÁS IMPORTANTE)
 
 - **Todos los tiempos (`trimIn`, `trimOut`, `cuts`) son segundos del ARCHIVO ORIGINAL**, no del video final. Si un clip usa `trimIn: 10` y tiene `cuts: [{from: 12, to: 14}]`, el corte se refiere a los segundos 12–14 del archivo fuente.

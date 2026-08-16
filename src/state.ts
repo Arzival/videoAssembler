@@ -1,4 +1,4 @@
-import type { AudioSpec, ClipSpec, Cut, Manifest, OutputFormat } from './lib/types.ts'
+import type { AudioSpec, ClipSpec, Cut, Manifest, OutputFormat, OverlayPosition, OverlaySpec } from './lib/types.ts'
 import { keepIntervals } from './lib/graph.ts'
 
 export interface ClipState {
@@ -98,11 +98,26 @@ export function trackFromSpec(spec: AudioSpec): TrackState {
 
 export const baseName = (path: string) => path.split('/').pop() ?? path
 
+export interface OverlayState {
+  id: string
+  file: string
+  media: File | null
+  url: string | null
+  /** Duración del archivo fuente (para límites en UI) */
+  duration: number
+  start: number
+  end: number
+  trimIn: number
+  scale: number
+  position: OverlayPosition
+}
+
 export function buildManifest(
   name: string,
   clips: ClipState[],
   voice: TrackState | null,
   music: TrackState | null,
+  overlays: OverlayState[],
   outputs: OutputFormat[],
 ): Manifest {
   return {
@@ -118,7 +133,34 @@ export function buildManifest(
     })),
     voice: voice ? trackSpec(voice) : null,
     music: music ? trackSpec(music) : null,
+    ...(overlays.length > 0
+      ? {
+          overlays: overlays.map((o) => ({
+            file: o.file,
+            start: Math.round(o.start * 1000) / 1000,
+            end: Math.round(o.end * 1000) / 1000,
+            trimIn: Math.round(o.trimIn * 1000) / 1000,
+            scale: Math.round(o.scale * 100) / 100,
+            position: o.position,
+          })),
+        }
+      : {}),
     outputs,
+  }
+}
+
+export function overlayFromSpec(spec: OverlaySpec): OverlayState {
+  return {
+    id: newId(),
+    file: spec.file,
+    media: null,
+    url: null,
+    duration: 0,
+    start: spec.start ?? 0,
+    end: spec.end ?? (spec.start ?? 0) + 5,
+    trimIn: spec.trimIn ?? 0,
+    scale: spec.scale ?? 0.35,
+    position: spec.position ?? 'top-right',
   }
 }
 
@@ -166,6 +208,7 @@ export type Selection =
   | { type: 'clip'; id: string }
   | { type: 'voice'; segment?: number }
   | { type: 'music'; segment?: number }
+  | { type: 'overlay'; id: string }
   | null
 
 const AUDIO_EXT = /\.(wav|mp3|m4a|aac|ogg|flac)$/i
@@ -315,4 +358,19 @@ export function clipOutOffsetAt(c: ClipState, src: number): number {
     if (src <= b) break
   }
   return out / c.speed
+}
+
+export function overlayFromBin(item: BinItem, start: number): OverlayState {
+  return {
+    id: newId(),
+    file: item.name,
+    media: item.media,
+    url: item.url,
+    duration: item.duration,
+    start,
+    end: start + Math.min(5, item.duration > 0 ? item.duration : 5),
+    trimIn: 0,
+    scale: 0.35,
+    position: 'top-right',
+  }
 }

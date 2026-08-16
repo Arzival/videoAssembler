@@ -1,11 +1,12 @@
 import { useRef } from 'react'
-import type { ClipState, Selection, TrackState } from '../state.ts'
+import type { ClipState, OverlayState, Selection, TrackState } from '../state.ts'
 import { baseName, clipOutSeconds, formatTime, trackSegments } from '../state.ts'
 
 interface Props {
   clips: ClipState[]
   voice: TrackState | null
   music: TrackState | null
+  overlays: OverlayState[]
   selection: Selection
   playhead: number
   totalDuration: number
@@ -13,6 +14,8 @@ interface Props {
   onSelect: (sel: Selection) => void
   onMove: (from: number, to: number) => void
   onScrub: (time: number) => void
+  onOverlayDragBegin: () => void
+  onOverlayMove: (id: string, start: number) => void
 }
 
 function rulerStep(total: number): number {
@@ -27,6 +30,7 @@ export function TimelinePane({
   clips,
   voice,
   music,
+  overlays,
   selection,
   playhead,
   totalDuration,
@@ -34,6 +38,8 @@ export function TimelinePane({
   onSelect,
   onMove,
   onScrub,
+  onOverlayDragBegin,
+  onOverlayMove,
 }: Props) {
   const dragFrom = useRef<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -111,6 +117,57 @@ export function TimelinePane({
             </span>
           ))}
         </div>
+
+        {overlays.length > 0 && (
+          <div className="tl-track tl-overlay-track">
+            {overlays.map((o) => {
+              const selected = selection?.type === 'overlay' && selection.id === o.id
+              const dur = o.end - o.start
+              return (
+                <div
+                  key={o.id}
+                  className={`tl-block tl-block-overlay${selected ? ' selected' : ''}${o.media ? '' : ' tl-missing'}`}
+                  style={{ left: pct(o.start), width: pct(dur) }}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onSelect({ type: 'overlay', id: o.id })
+                  }}
+                  onPointerDown={(e) => {
+                    // arrastre horizontal: mueve la capa en el tiempo
+                    e.stopPropagation()
+                    onSelect({ type: 'overlay', id: o.id })
+                    const rect = bodyRef.current?.getBoundingClientRect()
+                    if (!rect || rect.width === 0) return
+                    const startX = e.clientX
+                    const origStart = o.start
+                    let moved = false
+                    const move = (ev: PointerEvent) => {
+                      const dt = ((ev.clientX - startX) / rect.width) * total
+                      if (!moved && Math.abs(ev.clientX - startX) > 3) {
+                        moved = true
+                        onOverlayDragBegin()
+                      }
+                      if (moved) {
+                        const ns = Math.min(Math.max(0, origStart + dt), Math.max(0, total - dur))
+                        onOverlayMove(o.id, Math.round(ns * 10) / 10)
+                      }
+                    }
+                    const up = () => {
+                      window.removeEventListener('pointermove', move)
+                      window.removeEventListener('pointerup', up)
+                    }
+                    window.addEventListener('pointermove', move)
+                    window.addEventListener('pointerup', up)
+                  }}
+                  title={`${o.file} · capa ${formatTime(o.start)} → ${formatTime(o.end)} — arrastra para mover`}
+                >
+                  <span className="tl-block-name">◱ {baseName(o.file)}</span>
+                  <span className="tl-block-meta">{dur.toFixed(1)}s · {Math.round(o.scale * 100)}%</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         <div className="tl-track tl-video-track">
           {clips.length === 0 && <span className="tl-empty">Manda clips aquí desde «Archivos» con «+ Timeline»</span>}

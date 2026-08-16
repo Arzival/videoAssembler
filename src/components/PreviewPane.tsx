@@ -1,12 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ClipState, TrackState } from '../state.ts'
+import type { OverlayPosition } from '../lib/types.ts'
+import type { ClipState, OverlayState, TrackState } from '../state.ts'
 import { clipAt, clipOutOffsetAt, clipOutSeconds, formatTime, trackSourceTimeAt } from '../state.ts'
+
+/** Posición CSS de una capa dentro del cuadro del video (margen 3%) */
+function overlayStyle(o: OverlayState): React.CSSProperties {
+  const p: OverlayPosition = o.position
+  const st: React.CSSProperties = { position: 'absolute', width: `${o.scale * 100}%`, zIndex: 2, borderRadius: 4 }
+  const transforms: string[] = []
+  if (p.endsWith('left')) st.left = '3%'
+  else if (p.endsWith('right')) st.right = '3%'
+  else {
+    st.left = '50%'
+    transforms.push('translateX(-50%)')
+  }
+  if (p.startsWith('top')) st.top = '3%'
+  else if (p.startsWith('bottom')) st.bottom = '3%'
+  else {
+    st.top = '50%'
+    transforms.push('translateY(-50%)')
+  }
+  if (transforms.length) st.transform = transforms.join(' ')
+  return st
+}
 
 interface Props {
   clip: ClipState | null
   clips: ClipState[]
   voice: TrackState | null
   music: TrackState | null
+  overlays: OverlayState[]
   /** Clip bajo el cursor del timeline + tiempo fuente equivalente */
   scrub: { clip: ClipState; index: number; src: number } | null
   playhead: number
@@ -16,11 +39,12 @@ interface Props {
   playerRef: React.MutableRefObject<{ toggle: () => void } | null>
 }
 
-export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlayhead, onClipChange, playerRef }: Props) {
+export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhead, onPlayhead, onClipChange, playerRef }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const voiceRef = useRef<HTMLAudioElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const [seq, setSeq] = useState<number | null>(null) // índice del clip sonando al reproducir la timeline
+  const overlayRefs = useRef(new Map<string, HTMLVideoElement>())
   const [time, setTime] = useState(0)
   const startSrcRef = useRef<{ index: number; src: number } | null>(null)
 
@@ -34,6 +58,31 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrub?.clip.id, scrub?.src])
+
+  // capas: visibles y sincronizadas con el cursor; en reproducción corren solas
+  useEffect(() => {
+    for (const o of overlays) {
+      const el = overlayRefs.current.get(o.id)
+      if (!el) continue
+      const visible = playhead >= o.start && playhead < o.end
+      if (!visible) {
+        el.pause()
+        continue
+      }
+      const t = o.trimIn + (playhead - o.start)
+      if (seq != null) {
+        if (el.paused) {
+          el.currentTime = t
+          el.play().catch(() => {})
+        }
+      } else {
+        el.pause()
+        if (Math.abs(el.currentTime - t) > 0.05) el.currentTime = t
+      }
+    }
+    if (seq == null) return
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playhead, seq, overlays])
 
   const stopAll = () => {
     setSeq(null)
@@ -139,6 +188,7 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
     <section className="preview-pane">
       <div className="preview-stage">
         {active?.url ? (
+          <div className="preview-wrap">
           <video
             key={active.id}
             ref={videoRef}
@@ -162,6 +212,26 @@ export function PreviewPane({ clip, clips, voice, music, scrub, playhead, onPlay
               }
             }}
           />
+          {overlays.map((o) =>
+            o.url ? (
+              <video
+                key={o.id}
+                muted
+                playsInline
+                preload="metadata"
+                src={o.url}
+                ref={(el) => {
+                  if (el) overlayRefs.current.set(o.id, el)
+                  else overlayRefs.current.delete(o.id)
+                }}
+                style={{
+                  ...overlayStyle(o),
+                  display: playhead >= o.start && playhead < o.end ? 'block' : 'none',
+                }}
+              />
+            ) : null,
+          )}
+          </div>
         ) : (
           <div className="preview-empty">
             {clips.length === 0

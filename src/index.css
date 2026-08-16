@@ -725,3 +725,81 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- capas superpuestas ---------- */
+
+.preview-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.tl-overlay-track {
+  position: relative;
+  min-height: 40px;
+  display: block;
+}
+
+.tl-block-overlay {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  background: linear-gradient(180deg, #6a4a8a, #533a6e);
+  border-color: #8a63b4;
+  cursor: grab;
+}
+
+.tl-block-overlay:active {
+  cursor: grabbing;
+}
+
+.pos-grid-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  grid-template-rows: repeat(3, 16px);
+  gap: 3px;
+}
+
+.pos-cell {
+  padding: 0;
+  border-radius: 3px;
+  background: var(--panel-2);
+}
+
+.pos-cell.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.num-row {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.num-row input[type='number'] {
+  width: 70px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 4px 6px;
+  font-size: 0.8rem;
+}
+
+.num-inputs {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}

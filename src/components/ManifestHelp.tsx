@@ -84,7 +84,8 @@ export function ManifestHelp({ onClose }: Props) {
           <p className="modal-note">
             Tiempos en segundos del archivo original. <code>cuts</code> son pedazos internos que se eliminan
             (lo que haces con la tecla S) y el material se re-empata solo. <code>trimOut: null</code> en audio
-            = hasta el final.
+            = hasta el final. También hay <code>overlays</code>: capas de video encima del principal (botón
+            «+ Capa» en Archivos), con su rango de aparición, tamaño y posición.
           </p>
 
           <h4>🤖 Trabajarlo con IA (Claude Code)</h4>

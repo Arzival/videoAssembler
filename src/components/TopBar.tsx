@@ -3,7 +3,7 @@ import type { Manifest, OutputFormat } from '../lib/types.ts'
 import { ManifestHelp } from './ManifestHelp.tsx'
 import { inputFiles } from '../lib/graph.ts'
 import { renderInBrowser, downloadBlob } from '../lib/wasm.ts'
-import type { ClipState, TrackState } from '../state.ts'
+import type { ClipState, OverlayState, TrackState } from '../state.ts'
 import { buildManifest } from '../state.ts'
 
 interface Props {
@@ -14,18 +14,19 @@ interface Props {
   clips: ClipState[]
   voice: TrackState | null
   music: TrackState | null
+  overlays: OverlayState[]
   missing: string[]
   onLoadManifest: (m: Manifest) => void
 }
 
-export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, missing, onLoadManifest }: Props) {
+export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, overlays, missing, onLoadManifest }: Props) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [ratio, setRatio] = useState(0)
   const [error, setError] = useState('')
   const [showHelp, setShowHelp] = useState(false)
 
-  const manifest = () => buildManifest(name, clips, voice, music, outputs)
+  const manifest = () => buildManifest(name, clips, voice, music, overlays, outputs)
 
   const toggleFormat = (f: OutputFormat) =>
     onOutputs(outputs.includes(f) ? outputs.filter((x) => x !== f) : [...outputs, f])
@@ -46,6 +47,7 @@ export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, 
         ...clips.map((c) => c.media),
         ...(voice ? [voice.media] : []),
         ...(music ? [music.media] : []),
+        ...overlays.map((o) => o.media),
       ]
       if (files.some((f) => !f)) throw new Error('Faltan archivos por asignar')
       if (inputFiles(m).length !== files.length) throw new Error('Estado inconsistente de archivos')

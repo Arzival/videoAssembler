@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Manifest, OutputFormat } from './lib/types.ts'
 import { keepIntervals } from './lib/graph.ts'
-import type { BinItem, ClipState, Selection, TrackState } from './state.ts'
+import type { BinItem, ClipState, OverlayState, Selection, TrackState } from './state.ts'
 import {
   baseName,
   binPlaceholder,
@@ -12,6 +12,8 @@ import {
   clipOutSeconds,
   isAudioFile,
   newId,
+  overlayFromBin,
+  overlayFromSpec,
   probeMedia,
   trackFromBin,
   trackFromSpec,
@@ -39,6 +41,7 @@ export default function App() {
   const [clips, setClips] = useState<ClipState[]>([])
   const [voice, setVoice] = useState<TrackState | null>(null)
   const [music, setMusic] = useState<TrackState | null>(null)
+  const [overlays, setOverlays] = useState<OverlayState[]>([])
   const [outputs, setOutputs] = useState<OutputFormat[]>(['vertical'])
   const [selection, setSelection] = useState<Selection>(null)
   const [playhead, setPlayhead] = useState(0)
@@ -49,8 +52,8 @@ export default function App() {
   folderRef.current = folder
 
   // instantánea para los atajos de teclado (el listener vive fuera del ciclo de render)
-  const snap = useRef({ clips, voice, music, selection, playhead })
-  snap.current = { clips, voice, music, selection, playhead }
+  const snap = useRef({ clips, voice, music, overlays, selection, playhead })
+  snap.current = { clips, voice, music, overlays, selection, playhead }
 
   // ---- deshacer ----
 
@@ -58,14 +61,15 @@ export default function App() {
     clips: ClipState[]
     voice: TrackState | null
     music: TrackState | null
+    overlays: OverlayState[]
     selection: Selection
   }
   const history = useRef<HistoryEntry[]>([])
 
   /** Guarda el estado actual antes de una operación destructiva */
   const pushHistory = () => {
-    const { clips, voice, music, selection } = snap.current
-    history.current.push({ clips, voice, music, selection })
+    const { clips, voice, music, overlays, selection } = snap.current
+    history.current.push({ clips, voice, music, overlays, selection })
     if (history.current.length > 50) history.current.shift()
   }
 
@@ -75,6 +79,7 @@ export default function App() {
     setClips(prev.clips)
     setVoice(prev.voice)
     setMusic(prev.music)
+    setOverlays(prev.overlays)
     setSelection(prev.selection)
   }
 
@@ -114,6 +119,13 @@ export default function App() {
     }
     setVoice(fillTrack)
     setMusic(fillTrack)
+    setOverlays((prev) =>
+      prev.map((o) => {
+        if (o.media) return o
+        const p = prepared.find((p) => baseName(o.file) === p.file.name)
+        return p ? { ...o, media: p.file, url: p.url } : o
+      }),
+    )
 
     for (const p of prepared) {
       void probeMedia(p.url, p.kind).then((meta) => {
@@ -130,17 +142,21 @@ export default function App() {
           t && t.url === p.url && t.duration === 0 ? { ...t, duration: meta.duration } : t
         setVoice(fillDur)
         setMusic(fillDur)
+        setOverlays((prev) =>
+          prev.map((o) => (o.url === p.url && o.duration === 0 ? { ...o, duration: meta.duration } : o)),
+        )
       })
     }
   }
 
   /** Nombres de archivo que el proyecto necesita y aún no tienen File asignado */
   const missingNames = (): string[] => {
-    const { clips, voice, music } = snap.current
+    const { clips, voice, music, overlays } = snap.current
     return [
       ...clips.filter((c) => !c.media).map((c) => baseName(c.file)),
       ...(voice && !voice.media ? [baseName(voice.file)] : []),
       ...(music && !music.media ? [baseName(music.file)] : []),
+      ...overlays.filter((o) => !o.media).map((o) => baseName(o.file)),
     ].filter((v, i, arr) => arr.indexOf(v) === i)
   }
 
@@ -188,6 +204,7 @@ export default function App() {
       t && (item.url ? t.url === item.url : baseName(t.file) === item.name) ? null : t
     setVoice(clearTrack)
     setMusic(clearTrack)
+    setOverlays((prev) => prev.filter((o) => !(item.url ? o.url === item.url : baseName(o.file) === item.name)))
     setSelection(null)
     if (item.url) URL.revokeObjectURL(item.url)
   }
@@ -211,6 +228,22 @@ export default function App() {
     pushHistory()
     setMusic(trackFromBin(item, music?.volume ?? 0.15))
     setSelection({ type: 'music', segment: 0 })
+  }
+
+  const addOverlay = (item: BinItem) => {
+    pushHistory()
+    const o = overlayFromBin(item, snap.current.playhead)
+    setOverlays((prev) => [...prev, o])
+    setSelection({ type: 'overlay', id: o.id })
+  }
+
+  const updateOverlay = (id: string, patch: Partial<OverlayState>) =>
+    setOverlays((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)))
+
+  const removeOverlay = (id: string) => {
+    pushHistory()
+    setOverlays((prev) => prev.filter((o) => o.id !== id))
+    setSelection(null)
   }
 
   const updateClip = (id: string, patch: Partial<ClipState>) =>
@@ -290,6 +323,10 @@ export default function App() {
       removeClip(selection.id)
       return
     }
+    if (selection.type === 'overlay') {
+      removeOverlay(selection.id)
+      return
+    }
     const track = selection.type === 'voice' ? voice : music
     const setTrack = selection.type === 'voice' ? setVoice : setMusic
     if (!track || selection.segment == null) return
@@ -354,6 +391,7 @@ export default function App() {
     }))
     if (m.voice) refs.push({ name: baseName(m.voice.file), kind: 'audio' })
     if (m.music) refs.push({ name: baseName(m.music.file), kind: 'audio' })
+    for (const o of m.overlays ?? []) refs.push({ name: baseName(o.file), kind: 'video' })
     setBin((prev) => {
       const next = [...prev]
       for (const r of refs) if (!next.some((b) => b.name === r.name)) next.push(binPlaceholder(r.name, r.kind))
@@ -384,6 +422,13 @@ export default function App() {
     }
     setVoice(m.voice ? loadTrack(m.voice) : null)
     setMusic(m.music ? loadTrack(m.music) : null)
+    setOverlays(
+      (m.overlays ?? []).map((spec) => {
+        const o = overlayFromSpec(spec)
+        const b = findLoaded(spec.file)
+        return b ? { ...o, media: b.media, url: b.url, duration: b.duration } : o
+      }),
+    )
     setSelection(null)
     setPlayhead(0)
     // si hay carpeta conectada, carga los archivos referenciados sin intervención
@@ -411,11 +456,11 @@ export default function App() {
 
   useEffect(() => {
     const id = setTimeout(() => {
-      if (clips.length === 0 && !voice && !music) localStorage.removeItem(AUTOSAVE_KEY)
-      else localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(buildManifest(name, clips, voice, music, outputs)))
+      if (clips.length === 0 && !voice && !music && overlays.length === 0) localStorage.removeItem(AUTOSAVE_KEY)
+      else localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(buildManifest(name, clips, voice, music, overlays, outputs)))
     }, 400)
     return () => clearTimeout(id)
-  }, [clips, voice, music, name, outputs])
+  }, [clips, voice, music, overlays, name, outputs])
 
   const resetProject = () => {
     localStorage.removeItem(AUTOSAVE_KEY)
@@ -427,6 +472,7 @@ export default function App() {
     setClips([])
     setVoice(null)
     setMusic(null)
+    setOverlays([])
     setSelection(null)
     setPlayhead(0)
     setName('mi-video')
@@ -438,13 +484,17 @@ export default function App() {
 
   const totalDuration = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
   const totalBytes =
-    clips.reduce((s, c) => s + (c.media?.size ?? 0), 0) + (voice?.media?.size ?? 0) + (music?.media?.size ?? 0)
+    clips.reduce((s, c) => s + (c.media?.size ?? 0), 0) +
+    (voice?.media?.size ?? 0) +
+    (music?.media?.size ?? 0) +
+    overlays.reduce((s, o) => s + (o.media?.size ?? 0), 0)
   const totalMB = Math.round(totalBytes / (1024 * 1024))
   const has4k = clips.some((c) => Math.max(c.width, c.height) >= 2160)
   const missing = [
     ...clips.filter((c) => !c.media).map((c) => baseName(c.file)),
     ...(voice && !voice.media ? [baseName(voice.file)] : []),
     ...(music && !music.media ? [baseName(music.file)] : []),
+    ...overlays.filter((o) => !o.media).map((o) => baseName(o.file)),
   ].filter((v, i, arr) => arr.indexOf(v) === i)
 
   // la carpeta puede conectarse después de restaurar el autosave: intenta resolver faltantes
@@ -455,6 +505,7 @@ export default function App() {
 
   const selClipIndex = selection?.type === 'clip' ? clips.findIndex((c) => c.id === selection.id) : -1
   const selClip = selClipIndex >= 0 ? clips[selClipIndex] : null
+  const selOverlay = selection?.type === 'overlay' ? (overlays.find((o) => o.id === selection.id) ?? null) : null
   const scrub = clipAt(clips, playhead)
 
   return (
@@ -467,6 +518,7 @@ export default function App() {
         clips={clips}
         voice={voice}
         music={music}
+        overlays={overlays}
         missing={missing}
         onLoadManifest={loadManifest}
       />
@@ -514,6 +566,7 @@ export default function App() {
           onConnectFolder={() => void connectFolder()}
           onAddFiles={addFiles}
           onAddToTimeline={addToTimeline}
+          onAddOverlay={addOverlay}
           onAssignVoice={assignVoice}
           onAssignMusic={assignMusic}
           onRemove={removeBinItem}
@@ -523,6 +576,7 @@ export default function App() {
           clips={clips}
           voice={voice}
           music={music}
+          overlays={overlays}
           scrub={scrub}
           playhead={playhead}
           onPlayhead={setPlayhead}
@@ -539,6 +593,14 @@ export default function App() {
             onRemove={() => removeClip(selClip.id)}
             onDuplicate={() => duplicateClip(selClip.id)}
             onMove={(dir) => moveClip(selClipIndex, selClipIndex + dir)}
+          />
+        ) : selOverlay ? (
+          <Inspector
+            kind="overlay"
+            overlay={selOverlay}
+            playhead={playhead}
+            onChange={(patch) => updateOverlay(selOverlay.id, patch)}
+            onRemove={() => removeOverlay(selOverlay.id)}
           />
         ) : selection?.type === 'voice' && voice ? (
           <Inspector
@@ -569,6 +631,7 @@ export default function App() {
         clips={clips}
         voice={voice}
         music={music}
+        overlays={overlays}
         selection={selection}
         playhead={playhead}
         totalDuration={totalDuration}
@@ -576,6 +639,11 @@ export default function App() {
         onSelect={setSelection}
         onMove={moveClip}
         onScrub={setPlayhead}
+        onOverlayDragBegin={pushHistory}
+        onOverlayMove={(id, start) => {
+          const o = overlays.find((x) => x.id === id)
+          if (o) updateOverlay(id, { start, end: start + (o.end - o.start) })
+        }}
       />
     </div>
   )

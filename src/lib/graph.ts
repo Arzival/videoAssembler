@@ -1,4 +1,4 @@
-import type { AudioSpec, Cut, Manifest, OutputFormat } from './types.ts'
+import type { AudioSpec, Cut, Manifest, OutputFormat, OverlayPosition } from './types.ts'
 
 export const FORMATS: Record<OutputFormat, { w: number; h: number }> = {
   vertical: { w: 1080, h: 1920 },
@@ -19,12 +19,22 @@ export interface BuildOptions {
   outputName: string
 }
 
-/** Archivos de entrada en orden: clips…, voz?, música? */
+/** Archivos de entrada en orden: clips…, voz?, música?, capas… */
 export function inputFiles(m: Manifest): string[] {
   const files = m.clips.map((c) => c.file)
   if (m.voice) files.push(m.voice.file)
   if (m.music) files.push(m.music.file)
+  for (const o of m.overlays ?? []) files.push(o.file)
   return files
+}
+
+/** Expresiones x/y del filtro overlay para cada posición (margen 3%) */
+function overlayXY(pos: OverlayPosition): [string, string] {
+  const xs = { left: 'main_w*0.03', center: '(main_w-w)/2', right: 'main_w-w-main_w*0.03' }
+  const ys = { top: 'main_h*0.03', middle: '(main_h-h)/2', bottom: 'main_h-h-main_h*0.03' }
+  const x = pos.endsWith('left') ? xs.left : pos.endsWith('right') ? xs.right : xs.center
+  const y = pos.startsWith('top') ? ys.top : pos.startsWith('bottom') ? ys.bottom : ys.middle
+  return [x, y]
 }
 
 /** Resta los cortes internos al rango [trimIn, trimOut] → intervalos que sí se usan */
@@ -151,9 +161,30 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
     audioMap = '[acat]'
   }
 
+  // capas superpuestas: se aplican en cadena sobre el video concatenado
+  let vLabel = 'vcat'
+  const overlays = (m.overlays ?? []).filter((ov) => ov.end > ov.start + 0.01)
+  overlays.forEach((ov, j) => {
+    const idx = inputIdx + j
+    const dur = ov.end - ov.start
+    const width = Math.max(2, Math.round((w * Math.min(0.8, Math.max(0.1, ov.scale))) / 2) * 2)
+    const [x, y] = overlayXY(ov.position)
+    parts.push(
+      `[${idx}:v:0]trim=start=${fmt(ov.trimIn)}:end=${fmt(ov.trimIn + dur)},` +
+        `setpts=PTS-STARTPTS+${fmt(ov.start)}/TB,scale=${width}:-2[ol${j}]`,
+      `[${vLabel}][ol${j}]overlay=x=${x}:y=${y}:eof_action=pass:` +
+        `enable='between(t,${fmt(ov.start)},${fmt(ov.end)})'[vov${j}]`,
+    )
+    vLabel = `vov${j}`
+  })
+  if (overlays.length > 0) {
+    parts.push(`[${vLabel}]format=yuv420p[vfin]`)
+    vLabel = 'vfin'
+  }
+
   const args = ['-y']
   for (const name of o.inputNames) args.push('-i', name)
-  args.push('-filter_complex', parts.join(';'), '-map', '[vcat]', '-map', audioMap)
+  args.push('-filter_complex', parts.join(';'), '-map', `[${vLabel}]`, '-map', audioMap)
 
   if (o.encoder === 'videotoolbox') {
     args.push('-c:v', 'h264_videotoolbox', '-b:v', '12M', '-maxrate', '16M', '-bufsize', '24M', '-allow_sw', '1')
