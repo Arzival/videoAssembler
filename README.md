@@ -67,6 +67,18 @@ node cli/render.ts manifiesto.json --base /ruta/a/tus/videos [--out ./salida] [-
 - Encoder por defecto: `videotoolbox` en macOS (hardware), `x264` en otros sistemas.
 - Requiere Node ≥ 22.18 y `ffmpeg`/`ffprobe` en el PATH (o variables `FFMPEG`/`FFPROBE`).
 
+### Transcripción de la voz (editar por frases)
+
+```bash
+node cli/transcribe.ts /ruta/a/voz.wav        # → voz.transcript.json
+```
+
+Transcribe la nota de voz localmente (Whisper, sin internet) y devuelve **cada palabra con su segundo exacto**. Para qué sirve: pedirle a la IA cosas como *«cuando digo 'así que por eso decidí crear mi propio editor' pon tal clip, y que termine cuando acabo la frase X»* — la IA localiza las frases en la transcripción, calcula el rango de tiempo y arma el manifiesto sincronizado con lo que dices.
+
+- Requiere `whisper-cli` (`brew install whisper-cpp`) y el modelo en `~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin` ([descarga](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin), 547 MB, una sola vez).
+- Los tiempos son del archivo de audio (misma referencia que `trimIn`/`cuts` de la voz). Precisión ±0.1–0.3 s.
+- Flujo completo y mapeo de tiempos para IA: `manifiesto.md` §8.
+
 ### Manifiesto (contrato GUI ↔ CLI)
 
 > **Especificación completa en [`manifiesto.md`](manifiesto.md)** — cada campo, semántica de tiempos, resolución de archivos y guía para IA. Si vas a editar manifiestos (humano o IA), lee ese archivo. Lo de abajo es solo el resumen.
