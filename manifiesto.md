@@ -159,7 +159,21 @@ Una IA con acceso a este proyecto puede crear/editar manifiestos y renderizarlos
 
 **«¿Cuánto dura el video?»** → calcula con la fórmula de §3; no asumas que es `trimOut - trimIn` si hay `cuts` o `speed ≠ 1`.
 
-## 8. Ejemplo completo comentado
+## 8. Sincronizar la edición con lo que dice el audio
+
+El repo incluye un transcriptor local con marcas de tiempo por palabra (Whisper). Cuando el usuario pida cosas como *«cuando digo tal frase, pon tal clip»*, este es el flujo:
+
+```bash
+node cli/transcribe.ts /ruta/a/voz.wav          # → voz.transcript.json
+```
+
+- Salida: `{ text, words: [{ word, start, end }] }` — tiempos en segundos **del archivo de audio** (misma referencia que `trimIn`/`cuts` de la pista de voz).
+- Busca la frase pedida en `words` (compara en minúsculas y sin puntuación) → obtén el `start` de la primera palabra y el `end` de la última.
+- **Mapeo a tiempo del video final**: si la voz tiene `trimIn` o `cuts`, réstalos — el tiempo final = tiempo del archivo − trimIn − (duración de cortes anteriores a ese punto). Sin recortes, son iguales.
+- Con ese rango ya puedes: colocar una capa (`overlays` usa tiempos del video final directamente), cortar la voz en ese punto, o ajustar los clips para que uno cubra exactamente ese rango.
+- Requisitos: `whisper-cli` (brew whisper-cpp) y el modelo en `~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin` (o `WHISPER_MODEL`). Precisión típica: ±0.1–0.3 s.
+
+## 9. Ejemplo completo comentado
 
 Video de 19.3 s: intro acelerada, demo con corte interno y audio propio, cierre; narración con un tramo eliminado y música bajita.
 

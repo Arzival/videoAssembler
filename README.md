@@ -20,6 +20,8 @@ Si eres una IA (Claude Code, Copilot, etc.) y te pasaron este repo, esto es todo
 
 **Comandos del proyecto:** `npm install` · `npm run dev` (editor en local) · `npm run build` (typecheck + bundle, verifica esto tras cambios) · `npm run lint`.
 
+**Sincronizar con el audio:** si el usuario pide editar según lo que dice la voz («cuando digo X pon tal clip»), transcribe primero: `node cli/transcribe.ts voz.wav` → JSON con cada palabra y su tiempo. Detalles y mapeo de tiempos en `manifiesto.md` §8.
+
 **Principio rector que debes respetar:** este proyecto es deliberadamente mínimo y NO se itera constantemente. No agregues funcionalidades, dependencias ni refactors que el usuario no pidió. Si algo grande parece buena idea, propónlo — no lo implementes.
 
 ## Principio rector: solo lo básico
