@@ -17,6 +17,7 @@ import {
   probeMedia,
   trackFromBin,
   trackFromSpec,
+  trackOutSeconds,
   trackSegments,
 } from './state.ts'
 import type { DirHandle } from './lib/mediaFolder.ts'
@@ -425,7 +426,9 @@ export default function App() {
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         e.preventDefault()
         const step = (e.shiftKey ? 1 : 0.1) * (e.key === 'ArrowLeft' ? -1 : 1)
-        const total = snap.current.clips.reduce((s, c) => s + clipOutSeconds(c), 0)
+        const { clips, voice, music } = snap.current
+        const clipsTotal = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
+        const total = clipsTotal > 0 ? clipsTotal : Math.max(trackOutSeconds(voice), trackOutSeconds(music))
         setPlayhead((p) => Math.min(total, Math.max(0, Math.round((p + step) * 10) / 10)))
       }
     }
@@ -541,6 +544,8 @@ export default function App() {
   // ---- derivados ----
 
   const totalDuration = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
+  // sin clips, la timeline y el cursor viven sobre la duración de las pistas de audio
+  const timelineTotal = totalDuration > 0 ? totalDuration : Math.max(trackOutSeconds(voice), trackOutSeconds(music))
   const totalBytes =
     clips.reduce((s, c) => s + (c.media?.size ?? 0), 0) +
     (voice?.media?.size ?? 0) +
@@ -700,7 +705,7 @@ export default function App() {
         overlays={overlays}
         selection={selection}
         playhead={playhead}
-        totalDuration={totalDuration}
+        totalDuration={timelineTotal}
         totalMB={totalMB}
         onSelect={setSelection}
         onMove={moveClip}

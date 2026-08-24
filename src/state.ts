@@ -316,6 +316,13 @@ export function clipAt(
   return null
 }
 
+/** Segundos que una pista aporta (recortes y cortes descontados) */
+export function trackOutSeconds(t: TrackState | null): number {
+  if (!t) return 0
+  const end = t.trimOut ?? t.duration
+  return keepIntervals(t.trimIn, end, t.cuts).reduce((s, [a, b]) => s + (b - a), 0)
+}
+
 export interface TrackSegment {
   from: number
   to: number

@@ -52,7 +52,7 @@ npm run build      # genera dist/ para Cloudflare Pages
 
 1. Conecta tu carpeta de medios con «📂 Conectar carpeta» (una sola vez): al abrir manifiestos, los archivos se cargan solos. La búsqueda es recursiva (subcarpetas incluidas) y empareja por nombre exacto de archivo — si hay nombres duplicados usa el primero que encuentre. La conexión persiste entre sesiones (solo pide un clic de confirmación por sesión) y requiere navegador Chromium. Luego agrega clips (se ensamblan en orden; arrastra para reordenar).
 2. Por clip: recorte inicio/fin, velocidad (0.5×–2×), conservar o no el audio del clip con su volumen.
-3. Carga voz (WAV/MP3) y música, cada una con recorte y volumen.
+3. Carga voz (WAV/MP3) y música, cada una con recorte y volumen. Con solo audio cargado (sin clips), ▶ reproduce el resultado con sus cortes aplicados — útil para revisar una voz limpiada antes de armar el video.
 4. Capas: «+ Capa» pone un video *encima* del principal (picture-in-picture) durante un rango — arrastra su bloque morado en la timeline para moverlo en el tiempo, y ajusta tamaño/posición en el inspector. (Capas de texto: pendientes — requieren un ffmpeg con drawtext, p. ej. `brew install ffmpeg-full`.)
 5. Elige formato: vertical (1080×1920), horizontal (1920×1080) o ambos.
 6. **Descargar manifiesto** (recomendado) o **Exportar en navegador** (solo material ligero). Para abrir un manifiesto puedes usar el botón o **arrastrar el .json a la ventana** (también acepta archivos de video/audio sueltos).

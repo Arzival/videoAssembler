@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { OverlayPosition } from '../lib/types.ts'
 import type { ClipState, OverlayState, TrackState } from '../state.ts'
-import { clipAt, clipOutOffsetAt, clipOutSeconds, formatTime, trackSourceTimeAt } from '../state.ts'
+import { clipAt, clipOutOffsetAt, clipOutSeconds, formatTime, trackOutSeconds, trackSourceTimeAt } from '../state.ts'
+import { keepIntervals } from '../lib/graph.ts'
 
 /** Posición CSS de una capa dentro del cuadro del video (margen 3%) */
 function overlayStyle(o: OverlayState): React.CSSProperties {
@@ -44,6 +45,8 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
   const voiceRef = useRef<HTMLAudioElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const [seq, setSeq] = useState<number | null>(null) // índice del clip sonando al reproducir la timeline
+  const [audioOnly, setAudioOnly] = useState(false) // reproduciendo solo voz/música (sin clips)
+  const audioCleanups = useRef<Array<() => void>>([])
   const overlayRefs = useRef(new Map<string, HTMLVideoElement>())
   const wrapRef = useRef<HTMLDivElement>(null)
   // cuadro exacto donde se dibuja el video dentro del área (para posicionar las capas)
@@ -108,10 +111,57 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
 
   const stopAll = () => {
     setSeq(null)
+    setAudioOnly(false)
     startSrcRef.current = null
+    for (const clean of audioCleanups.current) clean()
+    audioCleanups.current = []
     videoRef.current?.pause()
     voiceRef.current?.pause()
     musicRef.current?.pause()
+  }
+
+  /** Arranca una pista saltándose sus cortes; si es la guía, mueve el cursor y detiene al final */
+  const startTrack = (el: HTMLAudioElement, track: TrackState, fromOut: number, driver: boolean): boolean => {
+    const kept = keepIntervals(track.trimIn, track.trimOut ?? track.duration, track.cuts)
+    const src = trackSourceTimeAt(track, fromOut)
+    if (kept.length === 0 || src == null) return false
+    el.currentTime = src
+    el.volume = Math.min(1, track.volume)
+    const outAt = (t: number) => {
+      let out = 0
+      for (const [a, b] of kept) {
+        if (t <= a) break
+        out += Math.min(t, b) - a
+        if (t <= b) break
+      }
+      return out
+    }
+    const onTime = () => {
+      const t = el.currentTime
+      const inside = kept.some(([a, b]) => t >= a - 0.05 && t < b)
+      if (!inside) {
+        const next = kept.find(([a]) => a > t)
+        if (next) {
+          el.currentTime = next[0]
+        } else {
+          el.pause()
+          if (driver) stopAll()
+        }
+        return
+      }
+      if (driver) onPlayhead(outAt(t))
+    }
+    const onEnded = () => {
+      if (driver) stopAll()
+    }
+    el.addEventListener('timeupdate', onTime)
+    el.addEventListener('ended', onEnded)
+    audioCleanups.current.push(() => {
+      el.removeEventListener('timeupdate', onTime)
+      el.removeEventListener('ended', onEnded)
+    })
+    el.play().catch(() => {})
+    return true
   }
 
   /** Reproduce el segmento del clip `c` (desde startSrc si se indica), saltando cortes */
@@ -177,14 +227,33 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
   }
 
   const playAll = () => {
-    if (clips.length === 0 || clips.some((c) => !c.url)) return
+    if (clips.some((c) => !c.url)) return
+    if (clips.length > 0) {
+      stopAll()
+      const total = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
+      const from = playhead >= total - 0.05 ? 0 : playhead // cursor al final → desde el inicio
+      const hit = clipAt(clips, from)
+      if (hit) startSrcRef.current = { index: hit.index, src: hit.src }
+      startAudioAt(from)
+      setSeq(hit?.index ?? 0)
+      return
+    }
+    // sin clips: reproducir solo la voz/música con sus cortes aplicados
+    const total = Math.max(trackOutSeconds(voice), trackOutSeconds(music))
+    if (total <= 0) return
     stopAll()
-    const total = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
-    const from = playhead >= total - 0.05 ? 0 : playhead // cursor al final → desde el inicio
-    const hit = clipAt(clips, from)
-    if (hit) startSrcRef.current = { index: hit.index, src: hit.src }
-    startAudioAt(from)
-    setSeq(hit?.index ?? 0)
+    const from = playhead >= total - 0.05 ? 0 : playhead
+    let hasDriver = false
+    for (const [ref, track] of [
+      [voiceRef, voice],
+      [musicRef, music],
+    ] as const) {
+      const el = ref.current
+      if (!el || !track?.url) continue
+      const started = startTrack(el, track, from, !hasDriver)
+      if (started) hasDriver = true
+    }
+    if (hasDriver) setAudioOnly(true)
   }
 
   playerRef.current = { toggle: () => (seq != null ? stopAll() : playAll()) }
@@ -261,19 +330,21 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
           </div>
         ) : (
           <div className="preview-empty">
-            {clips.length === 0
-              ? 'Agrega archivos y mándalos a la línea de tiempo'
-              : 'Mueve el cursor en la línea de tiempo o selecciona un clip'}
+            {clips.length === 0 && (voice?.url || music?.url)
+              ? `🎧 Proyecto de solo audio — dale ▶ para escuchar ${voice?.url ? 'la voz' : 'la música'} ya con sus cortes aplicados`
+              : clips.length === 0
+                ? 'Agrega archivos y mándalos a la línea de tiempo'
+                : 'Mueve el cursor en la línea de tiempo o selecciona un clip'}
           </div>
         )}
       </div>
       <div className="preview-controls">
-        {seq == null ? (
+        {seq == null && !audioOnly ? (
           <button
             className="primary"
             onClick={playAll}
-            disabled={clips.length === 0 || clips.some((c) => !c.url)}
-            title="Reproduce desde el cursor rojo, con voz y música (aprox.)"
+            disabled={(clips.length === 0 && !voice?.url && !music?.url) || clips.some((c) => !c.url)}
+            title="Reproduce desde el cursor rojo (con solo audio también funciona)"
           >
             ▶ Reproducir
           </button>
@@ -284,7 +355,7 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
           ▶ Clip
         </button>
         <span className="preview-time">
-          {formatTime(seq != null ? playhead : time)}
+          {formatTime(seq != null || audioOnly ? playhead : time)}
           {active && seq == null ? ` · clip: ${formatTime(segDuration)}` : ''}
           {seq != null ? ` · clip ${seq + 1}/${clips.length}` : ''}
         </span>
