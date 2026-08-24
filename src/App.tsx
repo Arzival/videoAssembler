@@ -46,6 +46,8 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>(null)
   const [playhead, setPlayhead] = useState(0)
   const [restored, setRestored] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [dropError, setDropError] = useState('')
   const [folder, setFolder] = useState<DirHandle | null>(null)
   const [folderPrompt, setFolderPrompt] = useState(false)
   const folderRef = useRef<DirHandle | null>(null)
@@ -194,6 +196,60 @@ export default function App() {
   // al arrancar, recupera la carpeta conectada en sesiones anteriores
   useEffect(() => {
     void loadFolderHandle().then((h) => h && setFolder(h))
+  }, [])
+
+  // drag & drop sobre toda la ventana: manifiesto .json o archivos de medios
+  const dropHandlers = useRef<{ loadManifest: (m: Manifest) => void; addFiles: (f: File[]) => void } | null>(null)
+
+  useEffect(() => {
+    let depth = 0
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes('Files') ?? false
+    const onDragEnter = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      depth++
+      setDragOver(true)
+    }
+    const onDragOver = (e: DragEvent) => {
+      if (hasFiles(e)) e.preventDefault()
+    }
+    const onDragLeave = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      depth = Math.max(0, depth - 1)
+      if (depth === 0) setDragOver(false)
+    }
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return
+      e.preventDefault()
+      depth = 0
+      setDragOver(false)
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length === 0) return
+      setDropError('')
+      const manifestFile = files.find((f) => f.name.toLowerCase().endsWith('.json'))
+      const media = files.filter((f) => !f.name.toLowerCase().endsWith('.json'))
+      if (manifestFile) {
+        void manifestFile.text().then((text) => {
+          try {
+            const m = JSON.parse(text) as Manifest
+            if (!Array.isArray(m.clips)) throw new Error('falta "clips"')
+            dropHandlers.current?.loadManifest(m)
+          } catch (err) {
+            setDropError(`El JSON soltado no parece un manifiesto (${err instanceof Error ? err.message : err})`)
+          }
+        })
+      }
+      if (media.length > 0) dropHandlers.current?.addFiles(media)
+    }
+    window.addEventListener('dragenter', onDragEnter)
+    window.addEventListener('dragover', onDragOver)
+    window.addEventListener('dragleave', onDragLeave)
+    window.addEventListener('drop', onDrop)
+    return () => {
+      window.removeEventListener('dragenter', onDragEnter)
+      window.removeEventListener('dragover', onDragOver)
+      window.removeEventListener('dragleave', onDragLeave)
+      window.removeEventListener('drop', onDrop)
+    }
   }, [])
 
   const removeBinItem = (item: BinItem) => {
@@ -480,6 +536,8 @@ export default function App() {
     setRestored(false)
   }
 
+  dropHandlers.current = { loadManifest, addFiles }
+
   // ---- derivados ----
 
   const totalDuration = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
@@ -537,6 +595,14 @@ export default function App() {
           >
             Cargar archivos
           </button>
+        </div>
+      )}
+      {dragOver && (
+        <div className="drop-overlay">📥 Suelta aquí tu manifiesto (.json) o archivos de video/audio</div>
+      )}
+      {dropError && (
+        <div className="banner">
+          ⚠ {dropError} <button className="small" onClick={() => setDropError('')}>✕</button>
         </div>
       )}
       {restored && (

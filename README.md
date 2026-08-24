@@ -55,7 +55,7 @@ npm run build      # genera dist/ para Cloudflare Pages
 3. Carga voz (WAV/MP3) y música, cada una con recorte y volumen.
 4. Capas: «+ Capa» pone un video *encima* del principal (picture-in-picture) durante un rango — arrastra su bloque morado en la timeline para moverlo en el tiempo, y ajusta tamaño/posición en el inspector. (Capas de texto: pendientes — requieren un ffmpeg con drawtext, p. ej. `brew install ffmpeg-full`.)
 5. Elige formato: vertical (1080×1920), horizontal (1920×1080) o ambos.
-6. **Descargar manifiesto** (recomendado) o **Exportar en navegador** (solo material ligero).
+6. **Descargar manifiesto** (recomendado) o **Exportar en navegador** (solo material ligero). Para abrir un manifiesto puedes usar el botón o **arrastrar el .json a la ventana** (también acepta archivos de video/audio sueltos).
 
 ### CLI (render nativo)
 

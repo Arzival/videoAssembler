@@ -45,10 +45,32 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
   const musicRef = useRef<HTMLAudioElement>(null)
   const [seq, setSeq] = useState<number | null>(null) // índice del clip sonando al reproducir la timeline
   const overlayRefs = useRef(new Map<string, HTMLVideoElement>())
+  const wrapRef = useRef<HTMLDivElement>(null)
+  // cuadro exacto donde se dibuja el video dentro del área (para posicionar las capas)
+  const [frame, setFrame] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
+
+  const measureFrame = () => {
+    const v = videoRef.current
+    if (!v || v.offsetWidth === 0) {
+      setFrame(null)
+      return
+    }
+    setFrame({ left: v.offsetLeft, top: v.offsetTop, width: v.offsetWidth, height: v.offsetHeight })
+  }
+
   const [time, setTime] = useState(0)
   const startSrcRef = useRef<{ index: number; src: number } | null>(null)
 
   const active = seq != null ? (clips[seq] ?? null) : (scrub?.clip ?? clip)
+
+  useEffect(() => {
+    measureFrame()
+    const ro = new ResizeObserver(measureFrame)
+    if (videoRef.current) ro.observe(videoRef.current)
+    if (wrapRef.current) ro.observe(wrapRef.current)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id])
 
   // el cursor del timeline manda cuando no se está reproduciendo
   useEffect(() => {
@@ -188,7 +210,7 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     <section className="preview-pane">
       <div className="preview-stage">
         {active?.url ? (
-          <div className="preview-wrap">
+          <div className="preview-wrap" ref={wrapRef}>
           <video
             key={active.id}
             ref={videoRef}
@@ -200,6 +222,7 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
             onTimeUpdate={(e) => handleTimeUpdate(e.currentTarget.currentTime)}
             onLoadedMetadata={(e) => {
               const v = e.currentTarget
+              measureFrame()
               if (seq == null && active.duration === 0) {
                 onClipChange(active.id, {
                   duration: v.duration,
@@ -212,24 +235,28 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
               }
             }}
           />
-          {overlays.map((o) =>
-            o.url ? (
-              <video
-                key={o.id}
-                muted
-                playsInline
-                preload="metadata"
-                src={o.url}
-                ref={(el) => {
-                  if (el) overlayRefs.current.set(o.id, el)
-                  else overlayRefs.current.delete(o.id)
-                }}
-                style={{
-                  ...overlayStyle(o),
-                  display: playhead >= o.start && playhead < o.end ? 'block' : 'none',
-                }}
-              />
-            ) : null,
+          {frame && (
+            <div className="preview-frame" style={frame}>
+              {overlays.map((o) =>
+                o.url ? (
+                  <video
+                    key={o.id}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    src={o.url}
+                    ref={(el) => {
+                      if (el) overlayRefs.current.set(o.id, el)
+                      else overlayRefs.current.delete(o.id)
+                    }}
+                    style={{
+                      ...overlayStyle(o),
+                      display: playhead >= o.start && playhead < o.end ? 'block' : 'none',
+                    }}
+                  />
+                ) : null,
+              )}
+            </div>
           )}
           </div>
         ) : (

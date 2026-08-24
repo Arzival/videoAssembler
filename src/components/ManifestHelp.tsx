@@ -37,7 +37,8 @@ export function ManifestHelp({ onClose }: Props) {
               «guardar el proyecto»: guárdalo junto a tus archivos de video.
             </li>
             <li>
-              <strong>Abrir manifiesto</strong> reconstruye todo el proyecto. Los archivos se reconectan por
+              <strong>Abrir manifiesto</strong> (o simplemente <strong>arrástralo y suéltalo</strong> sobre la
+              ventana) reconstruye todo el proyecto. Los archivos se reconectan por
               nombre: si ya están en «Archivos» se enlazan solos; si no, agrégalos y se emparejan automáticamente.
             </li>
             <li>
