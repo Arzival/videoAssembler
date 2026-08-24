@@ -113,7 +113,10 @@ export function ManifestHelp({ onClose }: Props) {
           <pre className="modal-code">node cli/render.ts mi-video.json --base ~/Documents/Videos</pre>
           <p className="modal-note">
             Los tres flujos son intercambiables: editas aquí y renderiza la IA, arma la IA y ajustas aquí, o
-            todo en un solo lado. El manifiesto es el mismo idioma en ambos mundos.
+            todo en un solo lado. El manifiesto es el mismo idioma en ambos mundos. El repo también trae
+            herramientas <em>opcionales</em> de pipeline para la IA: transcripción de voz con tiempos por
+            palabra, recorte automático de silencios y conversión de animaciones HTML en clips (ver README) —
+            todas tienen su equivalente manual si prefieres hacerlo tú.
           </p>
 
           <h4>📄 Especificación completa</h4>

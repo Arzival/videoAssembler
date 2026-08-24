@@ -22,6 +22,8 @@ Si eres una IA (Claude Code, Copilot, etc.) y te pasaron este repo, esto es todo
 
 **Sincronizar con el audio:** si el usuario pide editar según lo que dice la voz («cuando digo X pon tal clip»), transcribe primero: `node cli/transcribe.ts voz.wav` → JSON con cada palabra y su tiempo. Detalles y mapeo de tiempos en `manifiesto.md` §8.
 
+**Herramientas opcionales** (solo si el usuario las pide o su flujo las usa): `node cli/recortar-voz.ts voz.wav` quita silencios del audio (filtro silenceremove, defaults -40dB/0.5s); `node cli/textclip.ts animacion.html` graba una animación HTML de TextDecoration y la vuelve clip MP4. No las apliques por iniciativa propia: hay usuarios que prefieren el paso manual.
+
 **Principio rector que debes respetar:** este proyecto es deliberadamente mínimo y NO se itera constantemente. No agregues funcionalidades, dependencias ni refactors que el usuario no pidió. Si algo grande parece buena idea, propónlo — no lo implementes.
 
 ## Principio rector: solo lo básico
@@ -78,6 +80,18 @@ Transcribe la nota de voz localmente (Whisper, sin internet) y devuelve **cada p
 - Requiere `whisper-cli` (`brew install whisper-cpp`) y el modelo en `~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin` ([descarga](https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin), 547 MB, una sola vez).
 - Los tiempos son del archivo de audio (misma referencia que `trimIn`/`cuts` de la voz). Precisión ±0.1–0.3 s.
 - Flujo completo y mapeo de tiempos para IA: `manifiesto.md` §8.
+
+### Herramientas opcionales del pipeline
+
+Ninguna es necesaria para usar el editor — automatizan pasos que también puedes hacer a mano (o no hacer):
+
+```bash
+node cli/recortar-voz.ts voz.wav [--threshold -40] [--duration 0.5]   # → voz-recortada.wav
+node cli/textclip.ts animacion.html [--out clip.mp4]                  # → clip MP4 del HTML
+```
+
+- **`recortar-voz`**: elimina silencios de un audio con el filtro `silenceremove` de ffmpeg (réplica exacta del proyecto hermano [recortador-voz](https://github.com/Arzival), mismos parámetros por defecto). Alternativas igual de válidas: recortar la voz con cualquier otra herramienta, o dejar que la IA proponga cortes en el manifiesto (`voice.cuts`).
+- **`textclip`**: convierte una animación HTML exportada por TextDecoration en un clip MP4 — la «grabación de pantalla» automatizada: abre el HTML en un Chromium controlado (busca Chrome/caché de Playwright o `CHROME_PATH`), graba la animación completa (lee `TOTAL_MS` y el tamaño de `.stage` del propio archivo) y transcodifica a H.264. El clip resultante entra al manifiesto como cualquier video. Alternativa manual: grabar la pantalla como siempre.
 
 ### Manifiesto (contrato GUI ↔ CLI)
 
