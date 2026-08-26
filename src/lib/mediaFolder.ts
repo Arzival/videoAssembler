@@ -108,10 +108,46 @@ async function walk(dir: EntryHandle, wanted: Set<string>, out: File[], depth: n
   }
 }
 
-/** Busca archivos por nombre (recursivo) dentro de la carpeta conectada */
-export async function findFilesByName(handle: DirHandle, names: string[]): Promise<File[]> {
-  const wanted = new Set(names)
+interface PathHandle {
+  getDirectoryHandle?: (name: string) => Promise<PathHandle>
+  getFileHandle?: (name: string) => Promise<{ getFile: () => Promise<File> }>
+}
+
+/** Resuelve una ruta relativa exacta (p. ej. "videos/2/clip1.MOV") dentro de la carpeta */
+async function fileByPath(handle: DirHandle, relPath: string): Promise<File | null> {
+  try {
+    const parts = relPath.split('/').filter(Boolean)
+    let dir = handle as unknown as PathHandle
+    for (const part of parts.slice(0, -1)) {
+      if (!dir.getDirectoryHandle) return null
+      dir = await dir.getDirectoryHandle(part)
+    }
+    if (!dir.getFileHandle) return null
+    const fh = await dir.getFileHandle(parts[parts.length - 1])
+    return await fh.getFile()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Busca archivos dentro de la carpeta conectada. Cada referencia se intenta
+ * primero como RUTA exacta (evita ambigüedad con nombres repetidos en
+ * subcarpetas); si no existe tal ruta, se busca recursivamente por nombre.
+ */
+export async function findFilesByName(handle: DirHandle, refs: string[]): Promise<File[]> {
   const out: File[] = []
-  await walk(handle as unknown as EntryHandle, wanted, out, 0)
+  const byName = new Set<string>()
+  for (const ref of refs) {
+    if (ref.includes('/')) {
+      const f = await fileByPath(handle, ref)
+      if (f) {
+        out.push(f)
+        continue
+      }
+    }
+    byName.add(ref.split('/').pop() ?? ref)
+  }
+  if (byName.size > 0) await walk(handle as unknown as EntryHandle, byName, out, 0)
   return out
 }

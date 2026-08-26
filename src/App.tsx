@@ -152,14 +152,14 @@ export default function App() {
     }
   }
 
-  /** Nombres de archivo que el proyecto necesita y aún no tienen File asignado */
+  /** Referencias (con ruta si la traen) que el proyecto necesita y aún no tienen File asignado */
   const missingNames = (): string[] => {
     const { clips, voice, music, overlays } = snap.current
     return [
-      ...clips.filter((c) => !c.media).map((c) => baseName(c.file)),
-      ...(voice && !voice.media ? [baseName(voice.file)] : []),
-      ...(music && !music.media ? [baseName(music.file)] : []),
-      ...overlays.filter((o) => !o.media).map((o) => baseName(o.file)),
+      ...clips.filter((c) => !c.media).map((c) => c.file),
+      ...(voice && !voice.media ? [voice.file] : []),
+      ...(music && !music.media ? [music.file] : []),
+      ...overlays.filter((o) => !o.media).map((o) => o.file),
     ].filter((v, i, arr) => arr.indexOf(v) === i)
   }
 
@@ -444,6 +444,12 @@ export default function App() {
     setOutputs(m.outputs?.length ? m.outputs : ['vertical'])
 
     const findLoaded = (ref: string) => bin.find((b) => b.media && b.name === baseName(ref))
+    const fullRefs = [
+      ...m.clips.map((c) => c.file),
+      ...(m.voice ? [m.voice.file] : []),
+      ...(m.music ? [m.music.file] : []),
+      ...(m.overlays ?? []).map((o) => o.file),
+    ]
     const refs: Array<{ name: string; kind: 'video' | 'audio' }> = m.clips.map((c) => ({
       name: baseName(c.file),
       kind: 'video',
@@ -491,7 +497,7 @@ export default function App() {
     setSelection(null)
     setPlayhead(0)
     // si hay carpeta conectada, carga los archivos referenciados sin intervención
-    setTimeout(() => void resolveFromFolder(refs.map((r) => r.name)), 0)
+    setTimeout(() => void resolveFromFolder(fullRefs), 0)
   }
 
   // ---- autoguardado en el navegador ----
