@@ -178,6 +178,7 @@ node cli/transcribe.ts /ruta/a/voz.wav          # → voz.transcript.json
 El repo trae dos ayudantes de terminal que **no son obligatorios** — automatizan pasos que el usuario puede hacer a mano o saltarse:
 
 - `node cli/recortar-voz.ts voz.wav [--threshold -40] [--duration 0.5]` — elimina silencios del audio con `silenceremove` de ffmpeg (réplica del proyecto hermano «recortador-voz»). El archivo resultante se usa como `voice.file` del manifiesto, normalmente sin `cuts`. Pregunta al usuario sus parámetros preferidos si el resultado por defecto no le convence.
+- `node cli/limpiar-audio.ts clip.MOV [--out salida] [--recortar-inicio]` — limpia el audio de un clip (ruido y reverberación) con DeepFilterNet y normaliza la voz; útil antes de usar el clip con `keepAudio: true`. Sin recorte el video se copia intacto; con `--recortar-inicio` se elimina el arranque sin voz.
 - `node cli/textclip.ts animacion.html [--out clip.mp4]` — graba una animación HTML exportada por TextDecoration (Chromium controlado, duración leída de `TOTAL_MS`) y produce un MP4 que entra al manifiesto como clip normal o capa. El clip incluye ~2s de espera inicial propia de la animación: recórtala con `trimIn`.
 
 Orden recomendado cuando se usan: recortar voz → transcribir la voz recortada → sincronizar clips → generar/insertar clips de texto → renderizar.

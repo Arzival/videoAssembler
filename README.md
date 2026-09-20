@@ -22,7 +22,7 @@ Si eres una IA (Claude Code, Copilot, etc.) y te pasaron este repo, esto es todo
 
 **Sincronizar con el audio:** si el usuario pide editar según lo que dice la voz («cuando digo X pon tal clip»), transcribe primero: `node cli/transcribe.ts voz.wav` → JSON con cada palabra y su tiempo. Detalles y mapeo de tiempos en `manifiesto.md` §8.
 
-**Herramientas opcionales** (solo si el usuario las pide o su flujo las usa): `node cli/recortar-voz.ts voz.wav` quita silencios del audio (filtro silenceremove, defaults -40dB/0.5s); `node cli/textclip.ts animacion.html` graba una animación HTML de TextDecoration y la vuelve clip MP4. No las apliques por iniciativa propia: hay usuarios que prefieren el paso manual.
+**Herramientas opcionales** (solo si el usuario las pide o su flujo las usa): `node cli/recortar-voz.ts voz.wav` quita silencios del audio (filtro silenceremove, defaults -40dB/0.5s); `node cli/textclip.ts animacion.html` graba una animación HTML de TextDecoration y la vuelve clip MP4; `node cli/limpiar-audio.ts clip.MOV [--recortar-inicio]` limpia ruido/eco del audio de un clip con DeepFilterNet. No las apliques por iniciativa propia: hay usuarios que prefieren el paso manual.
 
 **Principio rector que debes respetar:** este proyecto es deliberadamente mínimo y NO se itera constantemente. No agregues funcionalidades, dependencias ni refactors que el usuario no pidió. Si algo grande parece buena idea, propónlo — no lo implementes.
 
@@ -88,9 +88,11 @@ Ninguna es necesaria para usar el editor — automatizan pasos que también pued
 ```bash
 node cli/recortar-voz.ts voz.wav [--threshold -40] [--duration 0.5]   # → voz-recortada.wav
 node cli/textclip.ts animacion.html [--out clip.mp4]                  # → clip MP4 del HTML
+node cli/limpiar-audio.ts clip.MOV [--recortar-inicio]                # → clip-limpio.MOV
 ```
 
 - **`recortar-voz`**: elimina silencios de un audio con el filtro `silenceremove` de ffmpeg (réplica exacta del proyecto hermano [recortador-voz](https://github.com/Arzival), mismos parámetros por defecto). Alternativas igual de válidas: recortar la voz con cualquier otra herramienta, o dejar que la IA proponga cortes en el manifiesto (`voice.cuts`).
+- **`limpiar-audio`**: elimina ruido de fondo y reverberación del audio de un clip con [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (red neuronal, corre local; binario único en `~/.local/bin/deep-filter` o `DEEP_FILTER`), más normalización de voz. Sin `--recortar-inicio` el video se copia sin recompresión; con él, detecta dónde arranca la voz y recorta el inicio mudo (re-encode por hardware). Ideal para clips grabados con el celular que van al manifiesto con `keepAudio: true`.
 - **`textclip`**: convierte una animación HTML exportada por TextDecoration en un clip MP4 — la «grabación de pantalla» automatizada: abre el HTML en un Chromium controlado (busca Chrome/caché de Playwright o `CHROME_PATH`), graba la animación completa (lee `TOTAL_MS` y el tamaño de `.stage` del propio archivo) y transcodifica a H.264. El clip resultante entra al manifiesto como cualquier video. Alternativa manual: grabar la pantalla como siempre.
 
 ### Manifiesto (contrato GUI ↔ CLI)
