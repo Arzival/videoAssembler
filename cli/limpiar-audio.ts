@@ -24,6 +24,10 @@ import process from 'node:process'
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 const FFPROBE = process.env.FFPROBE || 'ffprobe'
 const SPEECHNORM = 'speechnorm=e=6.25:r=0.00001:l=1'
+// EQ de emparejamiento tonal (aprobado por el autor): quita el encajonamiento del
+// cuarto (~220Hz) y da presencia (3kHz) para igualar el balance de una nota de voz
+const TONE_EQ = 'highpass=f=75,equalizer=f=220:t=q:w=1.2:g=-4.5,equalizer=f=3000:t=q:w=1.4:g=2'
+const AUDIO_CHAIN = `${TONE_EQ},${SPEECHNORM}`
 const PAD = 0.25 // colchón antes de la primera palabra al recortar el inicio
 
 function fail(msg: string): never {
@@ -101,10 +105,10 @@ try {
   }
 
   // 3. armar la salida
-  const audioFilter = ['-af', SPEECHNORM, '-c:a', 'aac', '-b:a', '192k']
+  const audioFilter = ['-af', AUDIO_CHAIN, '-c:a', 'aac', '-b:a', '192k']
   if (!hasVideo) {
     const isWav = /\.wav$/i.test(output)
-    const args = ['-v', 'error', '-y', '-ss', String(start), '-i', clean, '-af', SPEECHNORM,
+    const args = ['-v', 'error', '-y', '-ss', String(start), '-i', clean, '-af', AUDIO_CHAIN,
       ...(isWav ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'aac', '-b:a', '192k']), output]
     r = spawnSync(FFMPEG, args, { encoding: 'utf8' })
   } else if (start > 0) {
