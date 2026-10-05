@@ -37,16 +37,20 @@ interface Props {
   onPlayhead: (t: number) => void
   onClipChange: (id: string, patch: Partial<ClipState>) => void
   /** App registra aquí el control de reproducción (barra espaciadora) */
-  playerRef: React.MutableRefObject<{ toggle: () => void } | null>
+  playerRef: React.MutableRefObject<{ toggle: () => void; seek: (t: number) => void } | null>
+  /** Un archivo dejó de poder leerse (típicamente porque cambió en disco) */
+  onMediaError: () => void
 }
 
-export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhead, onPlayhead, onClipChange, playerRef }: Props) {
+export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhead, onPlayhead, onClipChange, playerRef, onMediaError }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const voiceRef = useRef<HTMLAudioElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const [seq, setSeq] = useState<number | null>(null) // índice del clip sonando al reproducir la timeline
   const [audioOnly, setAudioOnly] = useState(false) // reproduciendo solo voz/música (sin clips)
   const audioCleanups = useRef<Array<() => void>>([])
+  // listener activo del clip en reproducción: debe existir UNO solo a la vez
+  const clipCleanup = useRef<(() => void) | null>(null)
   const overlayRefs = useRef(new Map<string, HTMLVideoElement>())
   const wrapRef = useRef<HTMLDivElement>(null)
   // cuadro exacto donde se dibuja el video dentro del área (para posicionar las capas)
@@ -109,15 +113,22 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, seq, overlays])
 
-  const stopAll = () => {
-    setSeq(null)
-    setAudioOnly(false)
+  /** Quita listeners y pausa todo, sin tocar el estado de la secuencia */
+  const haltMedia = () => {
     startSrcRef.current = null
+    clipCleanup.current?.()
+    clipCleanup.current = null
     for (const clean of audioCleanups.current) clean()
     audioCleanups.current = []
     videoRef.current?.pause()
     voiceRef.current?.pause()
     musicRef.current?.pause()
+  }
+
+  const stopAll = () => {
+    haltMedia()
+    setSeq(null)
+    setAudioOnly(false)
   }
 
   /** Arranca una pista saltándose sus cortes; si es la guía, mueve el cursor y detiene al final */
@@ -173,6 +184,7 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     v.muted = !c.keepAudio
     v.volume = Math.min(1, c.audioVolume)
     v.currentTime = startSrc ?? c.trimIn
+    clipCleanup.current?.()
     const onTime = () => {
       const t = v.currentTime
       const cut = cuts.find((x) => t >= x.from && t < x.to)
@@ -181,14 +193,18 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
         return
       }
       if (t >= (c.trimOut || c.duration)) {
-        v.removeEventListener('timeupdate', onTime)
+        clipCleanup.current?.()
+        clipCleanup.current = null
         v.pause()
         onEnd()
       }
     }
     v.addEventListener('timeupdate', onTime)
+    clipCleanup.current = () => v.removeEventListener('timeupdate', onTime)
     v.play().catch(() => {}) // pausa inmediata: no es error
   }
+
+  const advance = () => setSeq((s) => (s != null && s + 1 < clips.length ? s + 1 : null))
 
   useEffect(() => {
     if (seq == null) {
@@ -204,45 +220,49 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     const start = startSrcRef.current?.index === seq ? startSrcRef.current.src : undefined
     startSrcRef.current = null
     const id = requestAnimationFrame(() => {
-      playClip(c, () => setSeq((s) => (s != null && s + 1 < clips.length ? s + 1 : null)), start)
+      playClip(c, advance, start)
     })
     return () => cancelAnimationFrame(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq])
 
-  /** Arranca voz y música en el punto del timeline T (mejor esfuerzo) */
+  /** Arranca voz y música en el punto T del timeline, respetando sus cortes */
   const startAudioAt = (T: number) => {
     for (const [ref, track] of [
       [voiceRef, voice],
       [musicRef, music],
     ] as const) {
       const el = ref.current
-      if (!el || !track) continue
-      const src = trackSourceTimeAt(track, T)
-      if (src == null) continue // la pista ya terminó antes de este punto
-      el.currentTime = src
-      el.volume = Math.min(1, track.volume)
-      el.play().catch(() => {})
+      if (!el || !track?.url) continue
+      startTrack(el, track, T, false)
     }
   }
 
-  const playAll = () => {
+  /** Reproduce desde el punto T del timeline (sirve para arrancar y para saltar en caliente) */
+  const playFrom = (T: number) => {
     if (clips.some((c) => !c.url)) return
     if (clips.length > 0) {
-      stopAll()
       const total = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
-      const from = playhead >= total - 0.05 ? 0 : playhead // cursor al final → desde el inicio
+      const from = T >= total - 0.05 ? 0 : Math.max(0, T) // cursor al final → desde el inicio
       const hit = clipAt(clips, from)
-      if (hit) startSrcRef.current = { index: hit.index, src: hit.src }
+      const idx = hit?.index ?? 0
+      haltMedia()
+      setAudioOnly(false)
       startAudioAt(from)
-      setSeq(hit?.index ?? 0)
+      if (seq === idx && videoRef.current) {
+        // mismo clip ya montado: el efecto de `seq` no se re-dispara, se arranca directo
+        playClip(clips[idx], advance, hit?.src)
+      } else {
+        if (hit) startSrcRef.current = { index: hit.index, src: hit.src }
+        setSeq(idx)
+      }
       return
     }
     // sin clips: reproducir solo la voz/música con sus cortes aplicados
     const total = Math.max(trackOutSeconds(voice), trackOutSeconds(music))
     if (total <= 0) return
-    stopAll()
-    const from = playhead >= total - 0.05 ? 0 : playhead
+    haltMedia()
+    const from = T >= total - 0.05 ? 0 : Math.max(0, T)
     let hasDriver = false
     for (const [ref, track] of [
       [voiceRef, voice],
@@ -253,10 +273,18 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
       const started = startTrack(el, track, from, !hasDriver)
       if (started) hasDriver = true
     }
-    if (hasDriver) setAudioOnly(true)
+    setAudioOnly(hasDriver)
   }
 
-  playerRef.current = { toggle: () => (seq != null ? stopAll() : playAll()) }
+  const playAll = () => playFrom(playhead)
+  const playing = seq != null || audioOnly
+
+  playerRef.current = {
+    toggle: () => (playing ? stopAll() : playAll()),
+    seek: (t: number) => {
+      if (playing) playFrom(t)
+    },
+  }
 
   const playSegment = () => {
     const target = active
@@ -287,7 +315,8 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
             className="preview-video"
             playsInline
             preload="metadata"
-            onClick={seq == null ? playAll : stopAll}
+            onClick={playing ? stopAll : playAll}
+            onError={onMediaError}
             onTimeUpdate={(e) => handleTimeUpdate(e.currentTarget.currentTime)}
             onLoadedMetadata={(e) => {
               const v = e.currentTarget
@@ -360,8 +389,8 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
           {seq != null ? ` · clip ${seq + 1}/${clips.length}` : ''}
         </span>
       </div>
-      {voice?.url && <audio ref={voiceRef} src={voice.url} preload="auto" />}
-      {music?.url && <audio ref={musicRef} src={music.url} preload="auto" />}
+      {voice?.url && <audio ref={voiceRef} src={voice.url} preload="auto" onError={onMediaError} />}
+      {music?.url && <audio ref={musicRef} src={music.url} preload="auto" onError={onMediaError} />}
     </section>
   )
 }

@@ -87,22 +87,30 @@ export default function App() {
   }
 
   // controles del preview, registrados por PreviewPane (para la barra espaciadora)
-  const playerRef = useRef<{ toggle: () => void } | null>(null)
+  const playerRef = useRef<{ toggle: () => void; seek: (t: number) => void } | null>(null)
 
   // ---- biblioteca de archivos ----
 
-  const addFiles = (list: FileList | File[] | null) => {
+  /**
+   * Agrega archivos a la biblioteca. Con `replace`, sustituye los ya cargados del mismo
+   * nombre por la versión nueva: un archivo que cambió en disco después de abrirse deja
+   * de ser legible para el navegador y hay que volver a leerlo.
+   */
+  const addFiles = (list: FileList | File[] | null, replace = false) => {
     if (!list || list.length === 0) return
     const prepared = Array.from(list).map((file) => ({
       file,
       url: URL.createObjectURL(file),
       kind: (isAudioFile(file) ? 'audio' : 'video') as 'audio' | 'video',
     }))
+    const stale = replace
+      ? bin.filter((b) => b.url && prepared.some((p) => p.file.name === b.name)).map((b) => b.url as string)
+      : []
 
     setBin((prev) => {
       const next = [...prev]
       for (const p of prepared) {
-        const idx = next.findIndex((b) => !b.media && b.name === p.file.name)
+        const idx = next.findIndex((b) => (replace || !b.media) && b.name === p.file.name)
         if (idx >= 0) next[idx] = { ...next[idx], media: p.file, url: p.url, kind: p.kind }
         else next.push({ id: newId(), name: p.file.name, media: p.file, url: p.url, kind: p.kind, duration: 0, width: 0, height: 0 })
       }
@@ -110,13 +118,13 @@ export default function App() {
     })
     setClips((prev) =>
       prev.map((c) => {
-        if (c.media) return c
+        if (c.media && !replace) return c
         const p = prepared.find((p) => baseName(c.file) === p.file.name)
         return p ? { ...c, media: p.file, url: p.url } : c
       }),
     )
     const fillTrack = (t: TrackState | null) => {
-      if (!t || t.media) return t
+      if (!t || (t.media && !replace)) return t
       const p = prepared.find((p) => baseName(t.file) === p.file.name)
       return p ? { ...t, media: p.file, url: p.url } : t
     }
@@ -124,11 +132,12 @@ export default function App() {
     setMusic(fillTrack)
     setOverlays((prev) =>
       prev.map((o) => {
-        if (o.media) return o
+        if (o.media && !replace) return o
         const p = prepared.find((p) => baseName(o.file) === p.file.name)
         return p ? { ...o, media: p.file, url: p.url } : o
       }),
     )
+    if (stale.length > 0) setTimeout(() => stale.forEach((u) => URL.revokeObjectURL(u)), 2000)
 
     for (const p of prepared) {
       void probeMedia(p.url, p.kind).then((meta) => {
@@ -136,17 +145,17 @@ export default function App() {
         setBin((prev) => prev.map((b) => (b.url === p.url ? { ...b, ...meta } : b)))
         setClips((prev) =>
           prev.map((c) =>
-            c.url === p.url && c.duration === 0
+            c.url === p.url && (replace || c.duration === 0)
               ? { ...c, ...meta, trimOut: c.trimOut > 0 ? Math.min(c.trimOut, meta.duration) : meta.duration }
               : c,
           ),
         )
         const fillDur = (t: TrackState | null) =>
-          t && t.url === p.url && t.duration === 0 ? { ...t, duration: meta.duration } : t
+          t && t.url === p.url && (replace || t.duration === 0) ? { ...t, duration: meta.duration } : t
         setVoice(fillDur)
         setMusic(fillDur)
         setOverlays((prev) =>
-          prev.map((o) => (o.url === p.url && o.duration === 0 ? { ...o, duration: meta.duration } : o)),
+          prev.map((o) => (o.url === p.url && (replace || o.duration === 0) ? { ...o, duration: meta.duration } : o)),
         )
       })
     }
@@ -166,7 +175,7 @@ export default function App() {
   const resolving = useRef(false)
 
   /** Busca en la carpeta conectada los archivos faltantes y los carga solos */
-  const resolveFromFolder = async (names?: string[]) => {
+  const resolveFromFolder = async (names?: string[], replace = false) => {
     const handle = folderRef.current
     if (!handle || resolving.current) return
     const wanted = names ?? missingNames()
@@ -178,11 +187,32 @@ export default function App() {
         return
       }
       const files = await findFilesByName(handle, wanted)
-      if (files.length > 0) addFiles(files)
+      if (files.length > 0) addFiles(files, replace)
       setFolderPrompt(false)
     } finally {
       resolving.current = false
     }
+  }
+
+  /** Todas las referencias del proyecto (con ruta), falten o no */
+  const allRefs = (): string[] => {
+    const { clips, voice, music, overlays } = snap.current
+    return [
+      ...clips.map((c) => c.file),
+      ...(voice ? [voice.file] : []),
+      ...(music ? [music.file] : []),
+      ...overlays.map((o) => o.file),
+    ].filter((v, i, arr) => arr.indexOf(v) === i)
+  }
+
+  // Un archivo que cambia en disco deja de poder leerse: se relee solo desde la carpeta
+  const lastHeal = useRef(0)
+  const healMedia = () => {
+    const now = Date.now()
+    if (now - lastHeal.current < 4000) return
+    lastHeal.current = now
+    if (folderRef.current) void resolveFromFolder(allRefs(), true)
+    else setDropError('Un archivo cambió en disco y el navegador ya no puede leerlo: vuelve a agregarlo en «Archivos» (o conecta tu carpeta para que se recargue solo).')
   }
 
   const connectFolder = async () => {
@@ -429,7 +459,9 @@ export default function App() {
         const { clips, voice, music } = snap.current
         const clipsTotal = clips.reduce((s, c) => s + clipOutSeconds(c), 0)
         const total = clipsTotal > 0 ? clipsTotal : Math.max(trackOutSeconds(voice), trackOutSeconds(music))
-        setPlayhead((p) => Math.min(total, Math.max(0, Math.round((p + step) * 10) / 10)))
+        const next = Math.min(total, Math.max(0, Math.round((snap.current.playhead + step) * 10) / 10))
+        setPlayhead(next)
+        playerRef.current?.seek(next)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -497,7 +529,7 @@ export default function App() {
     setSelection(null)
     setPlayhead(0)
     // si hay carpeta conectada, carga los archivos referenciados sin intervención
-    setTimeout(() => void resolveFromFolder(fullRefs), 0)
+    setTimeout(() => void resolveFromFolder(fullRefs, true), 0)
   }
 
   // ---- autoguardado en el navegador ----
@@ -600,7 +632,7 @@ export default function App() {
             onClick={async () => {
               if (await requestFolderPermission(folder)) {
                 setFolderPrompt(false)
-                void resolveFromFolder()
+                void resolveFromFolder(allRefs(), true)
               }
             }}
           >
@@ -659,6 +691,7 @@ export default function App() {
           onPlayhead={setPlayhead}
           onClipChange={updateClip}
           playerRef={playerRef}
+          onMediaError={healMedia}
         />
         {selClip ? (
           <Inspector
@@ -715,7 +748,10 @@ export default function App() {
         totalMB={totalMB}
         onSelect={setSelection}
         onMove={moveClip}
-        onScrub={setPlayhead}
+        onScrub={(t) => {
+          setPlayhead(t)
+          playerRef.current?.seek(t)
+        }}
         onOverlayDragBegin={pushHistory}
         onOverlayMove={(id, start) => {
           const o = overlays.find((x) => x.id === id)
