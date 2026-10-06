@@ -167,7 +167,7 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
   overlays.forEach((ov, j) => {
     const idx = inputIdx + j
     const dur = ov.end - ov.start
-    const width = Math.max(2, Math.round((w * Math.min(0.8, Math.max(0.1, ov.scale))) / 2) * 2)
+    const width = Math.max(2, Math.round((w * Math.min(1, Math.max(0.1, ov.scale))) / 2) * 2)
     const [x, y] = overlayXY(ov.position)
     parts.push(
       `[${idx}:v:0]trim=start=${fmt(ov.trimIn)}:end=${fmt(ov.trimIn + dur)},` +
@@ -183,7 +183,11 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
   }
 
   const args = ['-y']
-  for (const name of o.inputNames) args.push('-i', name)
+  for (const name of o.inputNames) {
+    // VP9 con transparencia (clips de texto): el decodificador nativo descarta el alfa
+    if (o.encoder !== 'wasm' && /\.webm$/i.test(name)) args.push('-c:v', 'libvpx-vp9')
+    args.push('-i', name)
+  }
   args.push('-filter_complex', parts.join(';'), '-map', `[${vLabel}]`, '-map', audioMap)
 
   if (o.encoder === 'videotoolbox') {

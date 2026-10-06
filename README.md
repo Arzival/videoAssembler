@@ -22,7 +22,7 @@ Si eres una IA (Claude Code, Copilot, etc.) y te pasaron este repo, esto es todo
 
 **Sincronizar con el audio:** si el usuario pide editar según lo que dice la voz («cuando digo X pon tal clip»), transcribe primero: `node cli/transcribe.ts voz.wav` → JSON con cada palabra y su tiempo. Detalles y mapeo de tiempos en `manifiesto.md` §8.
 
-**Herramientas opcionales** (solo si el usuario las pide o su flujo las usa): `node cli/recortar-voz.ts voz.wav` quita silencios del audio (filtro silenceremove, defaults -40dB/0.5s); `node cli/textclip.ts animacion.html` graba una animación HTML de TextDecoration y la vuelve clip MP4; `node cli/limpiar-audio.ts clip.MOV [--recortar-inicio]` limpia ruido/eco del audio de un clip con DeepFilterNet. No las apliques por iniciativa propia: hay usuarios que prefieren el paso manual.
+**Herramientas opcionales** (solo si el usuario las pide o su flujo las usa): `node cli/recortar-voz.ts voz.wav` quita silencios del audio (filtro silenceremove, defaults -40dB/0.5s); `node cli/textclip.ts animacion.html` graba una animación HTML de TextDecoration y la vuelve clip MP4; `node cli/limpiar-audio.ts clip.MOV [--recortar-inicio]` limpia ruido/eco del audio de un clip con DeepFilterNet; `node cli/texto.ts --texto "…" --estilo …` crea un texto animado transparente para usar como capa a pantalla completa. No las apliques por iniciativa propia: hay usuarios que prefieren el paso manual.
 
 **Principio rector que debes respetar:** este proyecto es deliberadamente mínimo y NO se itera constantemente. No agregues funcionalidades, dependencias ni refactors que el usuario no pidió. Si algo grande parece buena idea, propónlo — no lo implementes.
 
@@ -55,7 +55,7 @@ npm run build      # genera dist/ para Cloudflare Pages
 1. Conecta tu carpeta de medios con «📂 Conectar carpeta» (una sola vez): al abrir manifiestos, los archivos se cargan solos. La búsqueda es recursiva (subcarpetas incluidas) y empareja por nombre exacto de archivo — si hay nombres duplicados usa el primero que encuentre. La conexión persiste entre sesiones (solo pide un clic de confirmación por sesión) y requiere navegador Chromium. Luego agrega clips (se ensamblan en orden; arrastra para reordenar).
 2. Por clip: recorte inicio/fin, velocidad (0.5×–2×), conservar o no el audio del clip con su volumen.
 3. Carga voz (WAV/MP3) y música, cada una con recorte y volumen. Con solo audio cargado (sin clips), ▶ reproduce el resultado con sus cortes aplicados — útil para revisar una voz limpiada antes de armar el video.
-4. Capas: «+ Capa» pone un video *encima* del principal (picture-in-picture) durante un rango — arrastra su bloque morado en la timeline para moverlo en el tiempo, y ajusta tamaño/posición en el inspector. (Capas de texto: pendientes — requieren un ffmpeg con drawtext, p. ej. `brew install ffmpeg-full`.)
+4. Capas: «+ Capa» pone un video *encima* del principal (picture-in-picture) durante un rango — arrastra su bloque morado en la timeline para moverlo en el tiempo, y ajusta tamaño/posición en el inspector. Los textos animados entran igual, como capa al 100% (ver `cli/texto.ts`).
 5. Elige formato: vertical (1080×1920), horizontal (1920×1080) o ambos.
 6. **Descargar manifiesto** (recomendado) o **Exportar en navegador** (solo material ligero). Para abrir un manifiesto puedes usar el botón o **arrastrar el .json a la ventana** (también acepta archivos de video/audio sueltos).
 
@@ -89,10 +89,12 @@ Ninguna es necesaria para usar el editor — automatizan pasos que también pued
 node cli/recortar-voz.ts voz.wav [--threshold -40] [--duration 0.5]   # → voz-recortada.wav
 node cli/textclip.ts animacion.html [--out clip.mp4]                  # → clip MP4 del HTML
 node cli/limpiar-audio.ts clip.MOV [--recortar-inicio]                # → clip-limpio.MOV
+node cli/texto.ts --texto "Hola" --estilo rebote [--duracion 3]     # → texto.webm (transparente)
 ```
 
 - **`recortar-voz`**: elimina silencios de un audio con el filtro `silenceremove` de ffmpeg (réplica exacta del proyecto hermano [recortador-voz](https://github.com/Arzival), mismos parámetros por defecto). Alternativas igual de válidas: recortar la voz con cualquier otra herramienta, o dejar que la IA proponga cortes en el manifiesto (`voice.cuts`).
 - **`limpiar-audio`**: elimina ruido de fondo y reverberación del audio de un clip con [DeepFilterNet](https://github.com/Rikorose/DeepFilterNet) (red neuronal, corre local; binario único en `~/.local/bin/deep-filter` o `DEEP_FILTER`), más EQ de voz (des-encajona ~220Hz, presencia en 3kHz) y normalización. Sin `--recortar-inicio` el video se copia sin recompresión; con él, detecta dónde arranca la voz y recorta el inicio mudo (re-encode por hardware). Ideal para clips grabados con el celular que van al manifiesto con `keepAudio: true`.
+- **`texto`**: genera un clip de **texto animado con fondo transparente** (estilos `rebote`, `deslizar`, `maquina`, `resaltar` + `--resalta palabra`, `subtitulo`). Diseña el texto en HTML/CSS y lo captura cuadro por cuadro en un Chromium controlado (fluido sin importar la velocidad de la máquina); sale como WebM VP9 con alfa, que la web reproduce y el render decodifica con `libvpx-vp9`. Se usa como capa: `{ "file": "texto.webm", "start": 3, "end": 6, "scale": 1, "position": "center" }`.
 - **`textclip`**: convierte una animación HTML exportada por TextDecoration en un clip MP4 — la «grabación de pantalla» automatizada: abre el HTML en un Chromium controlado (busca Chrome/caché de Playwright o `CHROME_PATH`), graba la animación completa (lee `TOTAL_MS` y el tamaño de `.stage` del propio archivo) y transcodifica a H.264. El clip resultante entra al manifiesto como cualquier video. Alternativa manual: grabar la pantalla como siempre.
 
 ### Manifiesto (contrato GUI ↔ CLI)

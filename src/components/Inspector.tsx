@@ -167,7 +167,7 @@ export function Inspector(props: Props) {
             <input
               type="range"
               min={0.15}
-              max={0.8}
+              max={1}
               step={0.01}
               value={overlay.scale}
               onChange={(e) => onChange({ scale: Number(e.target.value) })}

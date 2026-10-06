@@ -44,7 +44,7 @@ export interface OverlaySpec {
   end: number
   /** Desde qué segundo del archivo fuente se toma (default 0) */
   trimIn: number
-  /** Ancho de la capa como fracción del ancho de salida (0.15–0.8) */
+  /** Ancho de la capa como fracción del ancho de salida (0.15–1; 1 = pantalla completa, p. ej. textos) */
   scale: number
   position: OverlayPosition
 }

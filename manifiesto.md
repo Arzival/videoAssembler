@@ -86,14 +86,14 @@ Videos que aparecen **encima** del video principal durante un rango (picture-in-
 | `file` | string | — | Video de la capa (se resuelve igual que los clips). |
 | `start` / `end` | número (seg) | — | **Segundos del VIDEO FINAL** (no del archivo) donde aparece y desaparece. Ojo: es el único lugar del manifiesto donde los tiempos son del video final. |
 | `trimIn` | número (seg) | 0 | Desde qué segundo del archivo fuente se toma la capa. |
-| `scale` | número | 0.35 | Ancho de la capa como fracción del ancho de salida (0.15–0.8). |
+| `scale` | número | 0.35 | Ancho de la capa como fracción del ancho de salida (0.15–1). Usa `1` + `center` para textos a pantalla completa. |
 | `position` | string | top-right | Una de: `top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right` (margen 3%). |
 
 - Las capas se dibujan en el orden del array (la última queda encima).
 - El audio de la capa **se descarta siempre**.
 - Si el archivo de la capa es más corto que `end - start`, la capa desaparece cuando el archivo se acaba.
 - Las capas no alargan el video; `end` más allá de la duración total simplemente se corta ahí.
-- Capas de **texto**: aún no soportadas (pendiente de un ffmpeg con drawtext; ver README).
+- Capas con **transparencia** (WebM VP9 con alfa, como los textos de `cli/texto.ts`) respetan su fondo transparente: solo se ve el texto.
 
 ## 3. Semántica de tiempos (LO MÁS IMPORTANTE)
 
@@ -179,6 +179,7 @@ El repo trae dos ayudantes de terminal que **no son obligatorios** — automatiz
 
 - `node cli/recortar-voz.ts voz.wav [--threshold -40] [--duration 0.5]` — elimina silencios del audio con `silenceremove` de ffmpeg (réplica del proyecto hermano «recortador-voz»). El archivo resultante se usa como `voice.file` del manifiesto, normalmente sin `cuts`. Pregunta al usuario sus parámetros preferidos si el resultado por defecto no le convence.
 - `node cli/limpiar-audio.ts clip.MOV [--out salida] [--recortar-inicio]` — limpia el audio de un clip (ruido y reverberación) con DeepFilterNet y normaliza la voz; útil antes de usar el clip con `keepAudio: true`. Sin recorte el video se copia intacto; con `--recortar-inicio` se elimina el arranque sin voz.
+- `node cli/texto.ts --texto "…" [--estilo rebote|deslizar|maquina|resaltar|subtitulo] [--resalta palabra] [--duracion 3] [--formato vertical|horizontal] [--out x.webm]` — texto animado con fondo transparente; insértalo en `overlays` con `scale: 1`, `position: "center"` y el rango `start`/`end` en tiempo del video final (para «cuando digo X pon este texto», ubica la frase con la transcripción). Genera el texto en el mismo `--formato` que el video.
 - `node cli/textclip.ts animacion.html [--out clip.mp4]` — graba una animación HTML exportada por TextDecoration (Chromium controlado, duración leída de `TOTAL_MS`) y produce un MP4 que entra al manifiesto como clip normal o capa. El clip incluye ~2s de espera inicial propia de la animación: recórtala con `trimIn`.
 
 Orden recomendado cuando se usan: recortar voz → transcribir la voz recortada → sincronizar clips → generar/insertar clips de texto → renderizar.
