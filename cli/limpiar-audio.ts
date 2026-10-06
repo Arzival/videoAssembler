@@ -23,11 +23,7 @@ import process from 'node:process'
 
 const FFMPEG = process.env.FFMPEG || 'ffmpeg'
 const FFPROBE = process.env.FFPROBE || 'ffprobe'
-const SPEECHNORM = 'speechnorm=e=6.25:r=0.00001:l=1'
-// EQ de emparejamiento tonal (aprobado por el autor): quita el encajonamiento del
-// cuarto (~220Hz) y da presencia (3kHz) para igualar el balance de una nota de voz
-const TONE_EQ = 'highpass=f=75,equalizer=f=220:t=q:w=1.2:g=-4.5,equalizer=f=3000:t=q:w=1.4:g=2'
-const AUDIO_CHAIN = `${TONE_EQ},${SPEECHNORM}`
+const AUDIO_CHAIN = 'speechnorm=e=6.25:r=0.00001:l=1'
 const PAD = 0.25 // colchón antes de la primera palabra al recortar el inicio
 
 function fail(msg: string): never {
