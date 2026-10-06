@@ -1,0 +1,43 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=block" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;background:transparent;overflow:hidden;font-family:Inter,-apple-system,system-ui,sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+.wrap{position:absolute;left:217px;top:198px;width:646px;animation:salida .42s cubic-bezier(.5,0,.75,0) var(--out) both}
+.card{background:rgba(30,30,30,.86);border-radius:27px;padding:27px;box-shadow:0 14px 54px rgba(0,0,0,.45),inset 0 0 0 1.5px rgba(255,255,255,.1);
+  animation:entra .62s cubic-bezier(.22,1.25,.36,1) both}
+@keyframes entra{from{transform:translateX(720px);opacity:0}to{transform:none;opacity:1}}
+@keyframes salida{to{transform:translateX(720px);opacity:0}}
+.hd{display:flex;align-items:center;gap:18px;margin-bottom:18px}
+.ic{width:61px;height:61px;border-radius:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700}
+.app{font-size:22px;font-weight:600;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.02em;flex:1}
+.tm{font-size:22px;color:rgba(255,255,255,.35)}
+.ti{font-size:27px;font-weight:600;line-height:1.25}
+.sub{font-size:22px;color:rgba(255,255,255,.6);line-height:1.35}
+.pop{animation:pop .45s cubic-bezier(.22,1.3,.36,1) both}
+@keyframes pop{from{opacity:0;transform:translateY(16px) scale(.96)}to{opacity:1;transform:none}}
+.fade{animation:fade .35s ease both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.type{display:inline-block;white-space:nowrap;clip-path:inset(0 100% 0 0);animation:type var(--td,1.4s) steps(var(--n,30),end) both}
+@keyframes type{to{clip-path:inset(0 0 0 0)}}
+.green{color:#30d158}.red{color:#ff453a}.orange{color:#ff9f0a}
+
+.f{margin-top:18px}
+.lb{font-size:19px;font-weight:600;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.in{background:rgba(255,255,255,.07);border-radius:14px;padding:15px 18px;font-size:23px;min-height:56px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.08)}
+.chips{display:flex;gap:12px}
+.chip{padding:12px 20px;border-radius:12px;font-size:22px;font-weight:600;background:rgba(255,255,255,.07)}
+.chip.on{box-shadow:inset 0 0 0 2.5px #d97757;color:#ffb38f;animation:sel .3s ease 3.3s both}
+@keyframes sel{from{box-shadow:inset 0 0 0 2.5px rgba(255,255,255,0);color:#fff}}
+.tg{display:flex;align-items:center;gap:14px;margin-top:22px;font-size:23px}
+.sw{margin-left:auto;width:72px;height:42px;border-radius:21px;background:rgba(255,255,255,.18);position:relative;animation:swbg .3s ease 8.5s forwards}
+.sw:after{content:'';position:absolute;top:4px;left:4px;width:34px;height:34px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.3);animation:knob .3s cubic-bezier(.3,1.4,.5,1) 8.5s forwards}
+@keyframes swbg{to{background:#30d158}}@keyframes knob{to{transform:translateX(30px)}}
+</style></head><body>
+<div class="wrap" style="--out:9.15s"><div class="card"><div class="hd"><div class="ic" style="background:#1f8a4c"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><circle cx="7" cy="7.5" r=".6" fill="#fff"/><circle cx="7" cy="16.5" r=".6" fill="#fff"/></svg></div><div class="app">Homelab · Encargos</div><div class="tm">nuevo</div></div>
+<div class="ti">Nuevo encargo</div>
+<div class="f pop" style="animation-delay:0.4s"><div class="lb">Instrucción</div><div class="in"><span class="type" style="--td:2.4s;--n:42;animation-delay:.8s">Resume cómo le fue al homelab esta semana</span></div></div>
+<div class="f pop" style="animation-delay:3.0s"><div class="lb">Modelo</div><div class="chips"><div class="chip on">✳ Claude Code</div><div class="chip">Codex</div></div></div>
+<div class="f pop" style="animation-delay:4.6s"><div class="lb">Frecuencia</div><div class="in">Cada lunes · 9:00</div></div>
+<div class="tg pop" style="animation-delay:7.6s"><span style="font-size:30px">✈️</span> Confirmar por Telegram<div class="sw"></div></div></div></div>
+<script></script></body></html>

@@ -1,0 +1,64 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=block" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;font-family:Inter,-apple-system,system-ui,sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+.scene{position:absolute;inset:0;overflow:hidden;
+  background:radial-gradient(1200px 900px at 50% 30%,#1b2140 0%,#0d1020 55%,#07080f 100%);
+  animation:sIn .45s ease both,sOut .45s ease var(--out) forwards}
+.scene:before{content:'';position:absolute;inset:0;opacity:.35;
+  background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:60px 60px;mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 75%)}
+@keyframes sIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+@keyframes sOut{to{opacity:0;transform:scale(.98)}}
+.lbl{position:absolute;left:0;right:0;text-align:center;font-size:26px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.h{position:absolute;left:60px;right:60px;text-align:center;font-size:62px;font-weight:800;letter-spacing:-.03em;line-height:1.08}
+.pop{animation:pop .55s cubic-bezier(.22,1.35,.36,1) both}
+@keyframes pop{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:none}}
+.fade{animation:fade .5s ease both}@keyframes fade{from{opacity:0}to{opacity:1}}
+.glow-o{box-shadow:0 0 0 2px rgba(217,119,87,.6),0 0 60px rgba(217,119,87,.45)}
+.green{color:#30d158}.red{color:#ff453a}.orange{color:#ff9f0a}
+
+.cols{position:absolute;top:330px;left:50px;right:50px;display:grid;grid-template-columns:1fr 1fr;gap:30px}
+.col{border-radius:36px;padding:34px 28px;background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 2px rgba(255,255,255,.1);min-height:1080px}
+.c1{animation:pop .55s cubic-bezier(.22,1.35,.36,1) .3s both}.c2{animation:pop .55s cubic-bezier(.22,1.35,.36,1) .5s both}
+.av{width:150px;height:150px;border-radius:50%;margin:0 auto 22px;display:flex;align-items:center;justify-content:center}
+.av svg{width:80px;height:80px}
+.nm{text-align:center;font-size:44px;font-weight:900}
+.price{text-align:center;font-size:76px;font-weight:900;letter-spacing:-.04em;margin:18px 0 6px;position:relative;height:90px}
+.price small{font-size:28px;font-weight:600;color:rgba(255,255,255,.5)}
+.per{text-align:center;font-size:24px;color:rgba(255,255,255,.5);margin-bottom:28px}
+.tsk{display:flex;align-items:center;gap:14px;padding:16px 18px;margin-bottom:12px;border-radius:18px;background:rgba(48,209,88,.12);font-size:25px;font-weight:600;
+  animation:pop .45s cubic-bezier(.22,1.35,.36,1) both}
+.tsk i{font-style:normal;width:38px;height:38px;border-radius:50%;background:#30d158;color:#06210f;display:flex;align-items:center;justify-content:center;font-weight:900;flex-shrink:0}
+.meter{margin-top:40px}
+.meter .lb{font-size:22px;color:rgba(255,255,255,.55);margin-bottom:12px}
+.track{height:26px;border-radius:13px;background:rgba(255,255,255,.1);overflow:hidden}
+.track i{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(0);border-radius:13px;background:linear-gradient(90deg,#30d158,#ff9f0a 60%,#ff453a);
+  animation:fill 2.2s cubic-bezier(.5,0,.3,1) 7.6s forwards, drain .8s ease 15.3s forwards}
+@keyframes fill{to{transform:scaleX(1)}}@keyframes drain{to{transform:scaleX(.12)}}
+.lim{margin-top:22px;text-align:center;padding:16px;border-radius:18px;background:rgba(255,69,58,.15);color:#ff453a;font-size:28px;font-weight:800;
+  animation:pop .45s cubic-bezier(.22,1.35,.36,1) 9.9s both,limOut .3s ease 15.0s forwards}
+@keyframes limOut{to{opacity:0;transform:scale(.9)}}
+.p20,.p100{position:absolute;left:0;right:0}
+.p20{animation:pop .5s cubic-bezier(.22,1.35,.36,1) 7.2s both,swapOut .35s ease 15.2s forwards}
+.p100{opacity:0;animation:pop .55s cubic-bezier(.22,1.35,.36,1) 15.45s both}
+@keyframes swapOut{to{opacity:0;transform:translateY(-30px)}}
+.soon{position:absolute;right:16px;top:-6px;font-size:20px;font-weight:800;color:#0a84ff;background:rgba(10,132,255,.16);padding:6px 12px;border-radius:10px;opacity:0;animation:pop .4s ease 15.8s both}
+.later{background:rgba(10,132,255,.14)}.later i{background:#0a84ff;color:#fff}
+</style></head><body><div class="scene" style="--out:18.55s">
+<div class="h pop" style="top:150px;animation-delay:.1s">¿Quién hace el trabajo?</div>
+<div class="cols">
+ <div class="col c1"><div class="av glow-o" style="background:radial-gradient(circle at 35% 30%,#f0936f,#c65f3f)"><svg viewBox="0 0 24 24"><path fill="#fff" d="M12 2l1.6 6.1L19.8 6l-4.3 4.7L22 12l-6.5 1.3 4.3 4.7-6.2-2.1L12 22l-1.6-6.1L4.2 18l4.3-4.7L2 12l6.5-1.3L4.2 6l6.2 2.1z"/></svg></div>
+  <div class="nm">Claude</div>
+  <div class="price pop" style="animation-delay:1.0s">$100<small>/mes</small></div><div class="per fade" style="animation-delay:1.2s">suscripción Max</div>
+  <div class="tsk" style="animation-delay:1.6s"><i>✓</i>Métricas de redes</div><div class="tsk" style="animation-delay:2.5s"><i>✓</i>Encargos programados</div><div class="tsk" style="animation-delay:3.4s"><i>✓</i>Notas en Qstify</div><div class="tsk" style="animation-delay:4.3s"><i>✓</i>Avisos por Telegram</div><div class="tsk" style="animation-delay:5.2s"><i>✓</i>Documentación</div></div>
+ <div class="col c2"><div class="av" style="background:radial-gradient(circle at 35% 30%,#3ad38f,#0f7a52);box-shadow:0 0 0 2px rgba(48,209,88,.5),0 0 60px rgba(48,209,88,.35)"><span style="font-size:76px">🤖</span></div>
+  <div class="nm">Astra</div>
+  <div class="price"><div class="p20">$20<small>/mes</small></div><div class="p100">$100<small>/mes</small></div><span class="soon">PRONTO</span></div>
+  <div class="per" style="position:relative;height:30px"><span class="p20" style="animation:pop .5s cubic-bezier(.22,1.35,.36,1) 7.4s both,swapOut .35s ease 15.2s forwards">se acaba enseguida</span><span class="p100">próximamente plan Max</span></div>
+  <div class="meter fade" style="animation-delay:7.5s"><div class="lb">Uso del plan</div><div class="track"><i></i></div></div>
+  <div class="lim">Límite alcanzado</div>
+  <div class="tsk later" style="animation-delay:16.00s"><i>✓</i>Análisis de métricas</div><div class="tsk later" style="animation-delay:16.45s"><i>✓</i>Revisión de código</div></div>
+</div></div>
+<script></script></body></html>

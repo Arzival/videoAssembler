@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=block" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:transparent;font-family:Inter,-apple-system,system-ui,sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+.scene{position:absolute;inset:0;overflow:hidden;
+  background:radial-gradient(1200px 900px at 50% 30%,#1b2140 0%,#0d1020 55%,#07080f 100%);
+  animation:sIn .45s ease both,sOut .45s ease var(--out) forwards}
+.scene:before{content:'';position:absolute;inset:0;opacity:.35;
+  background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);
+  background-size:60px 60px;mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 75%)}
+@keyframes sIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:none}}
+@keyframes sOut{to{opacity:0;transform:scale(.98)}}
+.lbl{position:absolute;left:0;right:0;text-align:center;font-size:26px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.h{position:absolute;left:60px;right:60px;text-align:center;font-size:62px;font-weight:800;letter-spacing:-.03em;line-height:1.08}
+.pop{animation:pop .55s cubic-bezier(.22,1.35,.36,1) both}
+@keyframes pop{from{opacity:0;transform:translateY(30px) scale(.9)}to{opacity:1;transform:none}}
+.fade{animation:fade .5s ease both}@keyframes fade{from{opacity:0}to{opacity:1}}
+.glow-o{box-shadow:0 0 0 2px rgba(217,119,87,.6),0 0 60px rgba(217,119,87,.45)}
+.green{color:#30d158}.red{color:#ff453a}.orange{color:#ff9f0a}
+
+.srv{position:absolute;left:50%;top:230px;width:300px;margin-left:-150px;border-radius:32px;padding:30px;background:rgba(255,255,255,.07);
+  box-shadow:inset 0 0 0 2px rgba(48,209,88,.45),0 0 70px rgba(48,209,88,.25);text-align:center;animation:pop .55s cubic-bezier(.22,1.35,.36,1) .15s both}
+.srv .r{height:30px;border-radius:9px;background:rgba(255,255,255,.12);margin:10px 0;position:relative}
+.srv .r:after{content:'';position:absolute;left:14px;top:9px;width:12px;height:12px;border-radius:50%;background:#30d158;box-shadow:0 0 12px #30d158;animation:led .8s step-end infinite}
+.srv .r:nth-child(2):after{animation-delay:.3s}.srv .r:nth-child(3):after{animation-delay:.55s}
+@keyframes led{50%{opacity:.25}}
+.srv b{display:block;font-size:32px;font-weight:800;margin-top:14px}
+.tasks{position:absolute;top:610px;left:0;right:0;display:flex;justify-content:center;gap:16px}
+.tk{padding:14px 24px;border-radius:999px;background:rgba(255,255,255,.08);font-size:25px;font-weight:600;box-shadow:inset 0 0 0 2px rgba(255,255,255,.1)}
+.doc{position:absolute;left:510px;top:560px;width:60px;height:78px;border-radius:10px;background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.4);opacity:0;
+  offset-path:path('M0 0 C 0 260, 0 420, 0 620');offset-rotate:0deg;animation:docfly 1.1s cubic-bezier(.45,0,.2,1) both}
+.doc:before{content:'';position:absolute;left:10px;right:10px;top:14px;height:7px;border-radius:4px;background:#c9c9d1;box-shadow:0 14px 0 #dcdce2,0 28px 0 #dcdce2}
+@keyframes docfly{0%{offset-distance:0%;opacity:0;transform:scale(.6)}15%{opacity:1;transform:scale(1)}85%{opacity:1}100%{offset-distance:100%;opacity:0;transform:scale(.4)}}
+.app{position:absolute;left:80px;right:80px;top:1180px;height:600px;border-radius:36px;background:#141625;overflow:hidden;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.1),0 40px 90px rgba(0,0,0,.6);animation:pop .6s cubic-bezier(.22,1.35,.36,1) 1.2s both}
+.bar{display:flex;align-items:center;gap:16px;padding:24px 28px;border-bottom:2px solid rgba(255,255,255,.07)}
+.q{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#7c3aed,#06b6d4);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:900;animation:qg 1.2s ease 6.4s 2}
+@keyframes qg{50%{box-shadow:0 0 0 10px rgba(124,58,237,.25),0 0 60px rgba(6,182,212,.6)}}
+.bar b{font-size:32px;font-weight:800}.bar span{margin-left:auto;font-size:22px;color:rgba(255,255,255,.45)}
+.ql{display:flex;align-items:center;gap:16px;padding:20px 30px;font-size:26px;border-bottom:1.5px solid rgba(255,255,255,.05);animation:row .45s cubic-bezier(.22,1.35,.36,1) both}
+@keyframes row{from{opacity:0;transform:translateX(-40px)}to{opacity:1;transform:none}}
+.ql .b{width:14px;height:14px;border-radius:4px;background:#7c3aed}
+.ql em{margin-left:auto;font-style:normal;font-size:19px;font-weight:700;color:#ffb38f;background:rgba(217,119,87,.18);padding:6px 12px;border-radius:9px}
+</style></head><body><div class="scene" style="--out:10.450000000000001s">
+<div class="lbl" style="top:110px">Todo queda documentado</div>
+<div class="srv"><div class="r"></div><div class="r"></div><div class="r"></div><b>Homelab</b></div>
+<div class="tasks"><div class="tk pop" style="animation-delay:0.7s">⚙️ Procesos</div><div class="tk pop" style="animation-delay:0.9s">✅ Actividades</div><div class="tk pop" style="animation-delay:1.1s">📁 Proyectos</div></div>
+<i class="doc" style="animation-delay:2.40s"></i><i class="doc" style="animation-delay:2.95s"></i><i class="doc" style="animation-delay:3.50s"></i><i class="doc" style="animation-delay:4.05s"></i><i class="doc" style="animation-delay:4.60s"></i><i class="doc" style="animation-delay:5.15s"></i>
+<div class="app"><div class="bar"><div class="q">Q</div><b>Qstify</b><span>Notas · Homelab</span></div><div class="ql" style="animation-delay:3.40s"><span class="b"></span>Bitácora semanal<em>✳ Claude</em></div><div class="ql" style="animation-delay:3.95s"><span class="b"></span>Métricas · semana 41<em>✳ Claude</em></div><div class="ql" style="animation-delay:4.50s"><span class="b"></span>Encargo: respaldo<em>✳ Claude</em></div><div class="ql" style="animation-delay:5.05s"><span class="b"></span>Recomendaciones<em>✳ Claude</em></div><div class="ql" style="animation-delay:5.60s"><span class="b"></span>Proceso: capturas<em>✳ Claude</em></div><div class="ql" style="animation-delay:6.15s"><span class="b"></span>Estado del servidor<em>✳ Claude</em></div></div></div>
+<script></script></body></html>
