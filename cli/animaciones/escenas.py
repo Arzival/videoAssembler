@@ -192,13 +192,14 @@ ESCENAS['s3-ias'] = (19.0, """
   {at}</div>
 </div>""")
 
-solo = set(sys.argv[1:])
-for sid, (dur, css, body, *script) in ESCENAS.items():
-    if solo and sid not in solo:
-        continue
-    html = f'{WORK}/{sid}.html'
-    open(html, 'w').write(page(css, body, dur, script[0] if script else ''))
-    if os.environ.get('SOLO_HTML'):
-        continue
-    r = subprocess.run(['node', f'{HERE}/capturar.ts', html, str(dur), f'{OUT}/{sid}.webm'], capture_output=True, text=True)
-    print(r.stdout.strip() or r.stderr[-600:], flush=True)
+if __name__ == '__main__':
+    solo = set(sys.argv[1:])
+    for sid, (dur, css, body, *script) in ESCENAS.items():
+        if solo and sid not in solo:
+            continue
+        html = f'{WORK}/{sid}.html'
+        open(html, 'w').write(page(css, body, dur, script[0] if script else ''))
+        if os.environ.get('SOLO_HTML'):
+            continue
+        r = subprocess.run(['node', f'{HERE}/capturar.ts', html, str(dur), f'{OUT}/{sid}.webm'], capture_output=True, text=True)
+        print(r.stdout.strip() or r.stderr[-600:], flush=True)

@@ -54,7 +54,15 @@ const tmp = mkdtempSync(join(tmpdir(), 'capturar-'))
 const browser = await chromium.launch({ executablePath: findChromium(), headless: true })
 try {
   const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 })
-  await page.goto(pathToFileURL(resolve(html)).href, { waitUntil: 'networkidle' })
+  // 'load' ya espera la hoja de Google Fonts; networkidle a veces se cuelga y tumbaba capturas
+  for (let intento = 1; ; intento++) {
+    try {
+      await page.goto(pathToFileURL(resolve(html)).href, { waitUntil: 'load', timeout: 60000 })
+      break
+    } catch (err) {
+      if (intento >= 3) throw err
+    }
+  }
   await page.evaluate(() => document.fonts.ready)
   const frames = Math.round(dur * FPS)
   for (let f = 0; f < frames; f++) {

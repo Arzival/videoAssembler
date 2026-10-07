@@ -236,13 +236,14 @@ COMPONENTES['u09-seguir'] = (8.5, """
 <div class="finger">👆</div>""",
 "window.__seek=t=>{document.getElementById('likes').textContent=t>=3.15?'1,204':'1,203';document.getElementById('coms').textContent=t>=4.8?'49':'48'}")
 
-solo = set(sys.argv[1:])
-for cid, (dur, css, body, *script) in COMPONENTES.items():
-    if solo and cid not in solo:
-        continue
-    html = f'{WORK}/{cid}.html'
-    open(html, 'w').write(page(css, body, dur, script[0] if script else ''))
-    if os.environ.get('SOLO_HTML'):
-        continue
-    r = subprocess.run(['node', f'{HERE}/capturar.ts', html, str(dur), f'{OUT}/{cid}.webm'], capture_output=True, text=True)
-    print(r.stdout.strip() or r.stderr[-600:], flush=True)
+if __name__ == '__main__':
+    solo = set(sys.argv[1:])
+    for cid, (dur, css, body, *script) in COMPONENTES.items():
+        if solo and cid not in solo:
+            continue
+        html = f'{WORK}/{cid}.html'
+        open(html, 'w').write(page(css, body, dur, script[0] if script else ''))
+        if os.environ.get('SOLO_HTML'):
+            continue
+        r = subprocess.run(['node', f'{HERE}/capturar.ts', html, str(dur), f'{OUT}/{cid}.webm'], capture_output=True, text=True)
+        print(r.stdout.strip() or r.stderr[-600:], flush=True)
