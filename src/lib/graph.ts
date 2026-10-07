@@ -191,9 +191,10 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
   args.push('-filter_complex', parts.join(';'), '-map', `[${vLabel}]`, '-map', audioMap)
 
   if (o.encoder === 'videotoolbox') {
-    args.push('-c:v', 'h264_videotoolbox', '-b:v', '12M', '-maxrate', '16M', '-bufsize', '24M', '-allow_sw', '1')
+    // alto bitrate: las redes recomprimen y conviene entregarles la mejor fuente posible
+    args.push('-c:v', 'h264_videotoolbox', '-b:v', '20M', '-maxrate', '26M', '-bufsize', '40M', '-profile:v', 'high', '-allow_sw', '1')
   } else if (o.encoder === 'x264') {
-    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '20')
+    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-profile:v', 'high')
   } else {
     args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23')
   }

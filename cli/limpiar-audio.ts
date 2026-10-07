@@ -6,9 +6,11 @@
  *
  *   node cli/limpiar-audio.ts clip.MOV [--out salida.MOV] [--recortar-inicio]
  *
- * - Con video y sin recorte: el stream de video se COPIA (sin recompresión).
- * - Con --recortar-inicio: detecta dónde arranca la voz (sobre el audio ya limpio),
- *   recorta desde 0.25s antes y re-encodea el video (VideoToolbox).
+ * - El video NUNCA se recomprime: se copia tal cual y solo se reemplaza el audio
+ *   (cada recompresión extra se come detalle, sobre todo en tomas de 1080p).
+ * - Con --recortar-inicio: detecta dónde arranca la voz (sobre el audio ya limpio) y
+ *   lo reporta como `trimIn` (0.25 s antes) en pantalla y en <salida>.json, para
+ *   aplicarlo en el manifiesto. En archivos de solo audio sí se recorta el archivo.
  * - Acepta también archivos de solo audio (wav/mp3/m4a).
  *
  * Requiere el binario `deep-filter` (descarga única, nativo, sin dependencias):
@@ -16,7 +18,7 @@
  *   → guárdalo como ~/.local/bin/deep-filter y dale chmod +x (o define DEEP_FILTER).
  */
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
@@ -67,7 +69,6 @@ if (!existsSync(input)) fail(`No existe: ${input}`)
 const probe = (args: string[]) =>
   spawnSync(FFPROBE, ['-v', 'error', ...args, input], { encoding: 'utf8' }).stdout.trim().replace(/,+$/, '')
 const hasVideo = probe(['-select_streams', 'v:0', '-show_entries', 'stream=codec_type', '-of', 'csv=p=0']) === 'video'
-const height = Number(probe(['-select_streams', 'v:0', '-show_entries', 'stream=height', '-of', 'csv=p=0'])) || 0
 const durIn = Number(probe(['-show_entries', 'format=duration', '-of', 'csv=p=0'])) || 0
 
 if (!output) {
@@ -97,7 +98,7 @@ try {
     const det = spawnSync(FFMPEG, ['-v', 'info', '-t', '30', '-i', clean, '-af', 'silencedetect=noise=-38dB:d=0.4', '-f', 'null', '-'], { encoding: 'utf8' }).stderr
     const m = /silence_start: 0[\s\S]*?silence_end: ([\d.]+)/.exec(det)
     if (m) start = Math.max(0, Number(m[1]) - PAD)
-    console.log(start > 0 ? `voz detectada en ${(start + PAD).toFixed(2)}s → recorte desde ${start.toFixed(2)}s` : 'no hay silencio inicial que recortar')
+    console.log(start > 0 ? `voz detectada en ${(start + PAD).toFixed(2)}s → trimIn sugerido ${start.toFixed(2)}s` : 'no hay silencio inicial que recortar')
   }
 
   // 3. armar la salida
@@ -107,21 +108,20 @@ try {
     const args = ['-v', 'error', '-y', '-ss', String(start), '-i', clean, '-af', AUDIO_CHAIN,
       ...(isWav ? ['-c:a', 'pcm_s16le'] : ['-c:a', 'aac', '-b:a', '192k']), output]
     r = spawnSync(FFMPEG, args, { encoding: 'utf8' })
-  } else if (start > 0) {
-    // recorte: re-encodea el video con aceleración por hardware
-    const bitrate = height >= 2000 ? '25M' : '12M'
-    r = spawnSync(FFMPEG, ['-v', 'error', '-y', '-ss', String(start), '-i', input, '-ss', String(start), '-i', clean,
-      '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'hevc_videotoolbox', '-b:v', bitrate, '-tag:v', 'hvc1',
-      ...audioFilter, '-shortest', '-movflags', '+faststart', output], { encoding: 'utf8' })
   } else {
-    // sin recorte: el video se copia tal cual, solo cambia el audio
+    // el video se copia tal cual (sin recompresión); el recorte del inicio va en el manifiesto
     r = spawnSync(FFMPEG, ['-v', 'error', '-y', '-i', input, '-i', clean, '-map', '0:v:0', '-map', '1:a:0',
       '-c:v', 'copy', ...audioFilter, '-shortest', '-movflags', '+faststart', output], { encoding: 'utf8' })
   }
   if (r.status !== 0) fail(`ffmpeg falló al armar la salida:\n${r.stderr}`)
 
   const durOut = Number(spawnSync(FFPROBE, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', output], { encoding: 'utf8' }).stdout.trim()) || 0
-  console.log(`✔ ${durIn.toFixed(1)}s → ${durOut.toFixed(1)}s${start > 0 ? ` (inicio sin voz recortado)` : ''}`)
+  if (hasVideo && trimStart) {
+    writeFileSync(`${output}.json`, JSON.stringify({ trimIn: Math.round(start * 100) / 100 }, null, 2))
+    console.log(`✔ ${durIn.toFixed(1)}s · video copiado sin recompresión · trimIn ${start.toFixed(2)}s → ${output}.json`)
+  } else {
+    console.log(`✔ ${durIn.toFixed(1)}s → ${durOut.toFixed(1)}s${start > 0 ? ' (inicio sin voz recortado)' : ''}`)
+  }
   console.log(`  ${output}`)
 } finally {
   rmSync(tmp, { recursive: true, force: true })
