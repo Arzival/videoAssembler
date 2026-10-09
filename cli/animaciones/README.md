@@ -26,3 +26,7 @@ En el manifiesto: `{ "file": "videos/N/animaciones/x.webm", "start": 27.3, "end"
 - `tarjetas.py`, `escenas.py` — generadores con el sistema visual (CSS base) y los elementos del video 5 como ejemplo.
 - `ejemplos/video5/` — los HTML finales del video 5 (servidor, métricas, encargo, Qstify, notas, seguir y 3 escenas): plantillas para copiar y adaptar.
 - `hyperframes/` — notificaciones (Telegram, capturas) hechas con un bloque de [HyperFrames](https://github.com/heygen-com/hyperframes): `notificacion.html` (bloque adaptado: ícono de Telegram y cuerpo `__BODY__`) y `generar.py` (renderiza bloques del catálogo, recorta su contenido y lo recoloca en vertical). Requiere `npx hyperframes init` + `npx hyperframes add <bloque>` en `HF_PROYECTO`.
+
+## El Log (sección semanal de noticias)
+
+`ellog.py` define la identidad de la sección: cada noticia es una entrada de `git log` (hash + número), terminal oscura con acento verde, logos oficiales de `logos/` (Simple Icons, CC0). Aquí las escenas a pantalla completa son las protagonistas (~85 % del video) y los clips solo asoman en momentos puntuales con alguna tarjeta encima. Piezas fijas: `intro()` (índice de la semana) y `cierre()` (resumen; deja arriba libre para «Sígueme»). El contenido de cada semana va en `ejemplos/ellog-NN.py` con tiempos del video final; al correrlo sin ids escribe `overlays.json` listo para el manifiesto. Las escenas consecutivas se encadenan (`sigue=True`) para no asomar el clip entre una y otra.
