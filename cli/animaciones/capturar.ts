@@ -64,6 +64,8 @@ try {
     }
   }
   await page.evaluate(() => document.fonts.ready)
+  // escenas con capa 3D (three.js): esperan a que carguen modelos/fuentes antes del primer cuadro
+  await page.evaluate(() => (window as unknown as { __listo?: Promise<void> }).__listo)
   const frames = Math.round(dur * FPS)
   for (let f = 0; f < frames; f++) {
     await page.evaluate((ms) => {
