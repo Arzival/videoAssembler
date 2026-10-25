@@ -17,9 +17,11 @@ interface Props {
   overlays: OverlayState[]
   missing: string[]
   onLoadManifest: (m: Manifest) => void
+  /** Abre el modo de comparar (hasta 4 manifiestos) */
+  onComparar?: () => void
 }
 
-export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, overlays, missing, onLoadManifest }: Props) {
+export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, overlays, missing, onLoadManifest, onComparar }: Props) {
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState('')
   const [ratio, setRatio] = useState(0)
@@ -122,6 +124,11 @@ export function TopBar({ name, onName, outputs, onOutputs, clips, voice, music, 
               }}
             />
           </label>
+          {onComparar && (
+            <button onClick={onComparar} title="Ver de 2 a 4 manifiestos lado a lado (también puedes soltar varios .json a la vez)">
+              Comparar
+            </button>
+          )}
           <button onClick={downloadManifest} disabled={clips.length === 0}>
             Guardar manifiesto
           </button>

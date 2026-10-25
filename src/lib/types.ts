@@ -14,7 +14,11 @@ export interface ClipSpec {
   keepAudio: boolean
   audioVolume: number
   cuts?: Cut[]
+  /** Cómo entra al formato de salida: 'contain' (default) = completo con fondo borroso; 'cover' = llena el cuadro recortando lo que sobra */
+  fit?: ClipFit
 }
+
+export type ClipFit = 'contain' | 'cover'
 
 export interface AudioSpec {
   file: string
@@ -47,6 +51,11 @@ export interface OverlaySpec {
   /** Ancho de la capa como fracción del ancho de salida (0.15–1; 1 = pantalla completa, p. ej. textos) */
   scale: number
   position: OverlayPosition
+  /**
+   * Página HTML de la escena (motor de animaciones): el reproductor la muestra EN VIVO sin haberla grabado.
+   * `file` sigue siendo el .webm que tendrá al grabarse; el render solo usa `file`.
+   */
+  html?: string
 }
 
 export interface Manifest {

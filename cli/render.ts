@@ -12,8 +12,9 @@
  * FFMPEG / FFPROBE: variables de entorno para rutas alternativas de los binarios.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import process from 'node:process'
 import type { Manifest } from '../src/lib/types.ts'
 import { buildArgs, inputFiles, outputDuration, outputFileName, type Encoder } from '../src/lib/graph.ts'
@@ -54,6 +55,7 @@ if (!existsSync(manifestPath)) fail(`No existe: ${manifestPath}`)
 if (!baseDir) baseDir = dirname(manifestPath)
 baseDir = resolve(baseDir)
 outDir = resolve(outDir)
+mkdirSync(outDir, { recursive: true })
 
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Manifest
 if (!Array.isArray(manifest.clips) || manifest.clips.length === 0) fail('El manifiesto no tiene clips')
@@ -80,6 +82,12 @@ function resolveFile(ref: string): string {
   return hits[0]
 }
 
+// escenas del motor que se revisaron en vivo pero aún no se graban: avisar claro en vez de «no se encontró»
+const sinGrabar = (manifest.overlays ?? []).filter((o) => o.html && !existsSync(resolve(baseDir, o.file)) && findByName(baseDir, basename(o.file)).length === 0)
+if (sinGrabar.length)
+  fail(`Faltan grabar ${sinGrabar.length} escenas del motor (${sinGrabar.map((o) => basename(o.file)).join(', ')}).\n` +
+    '  Corre: python3 cli/animaciones/motor/motor.py <guion.json> --capturar')
+
 const refs = inputFiles(manifest)
 const inputNames = refs.map(resolveFile)
 console.log('Archivos:')
@@ -101,12 +109,98 @@ const clipHasAudio = manifest.clips.map((c, i) => {
   return ok
 })
 
+// ---- tomas HDR (HLG/PQ del iPhone) → SDR BT.709 con la LUT de cli/luts ----
+const LUT_DIR = join(dirname(fileURLToPath(import.meta.url)), 'luts')
+function hdrOf(file: string): 'hlg' | 'pq' | null {
+  const r = spawnSync(FFPROBE, ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=color_transfer', '-of', 'csv=p=0', file], {
+    encoding: 'utf8',
+  })
+  const trc = (r.stdout || '').split(/[,\n]/)[0].trim() // csv deja una coma final en tomas con side data (Dolby Vision)
+  return trc === 'arib-std-b67' ? 'hlg' : trc === 'smpte2084' ? 'pq' : null
+}
+const clipHdr: Array<'hlg' | 'pq' | null> = manifest.clips.map((_, i) => hdrOf(inputNames[i]))
+const nHdr = clipHdr.filter(Boolean).length
+if (nHdr) {
+  for (const k of ['hlg', 'pq'] as const)
+    if (clipHdr.includes(k) && !existsSync(join(LUT_DIR, `${k}-a-bt709.cube`))) fail(`Falta cli/luts/${k}-a-bt709.cube (python3 cli/luts/generar.py)`)
+  console.log(`HDR → SDR: ${nHdr} de ${clipHdr.length} clips (LUT de cli/luts)`)
+  await preconvertirHdr()
+}
+
+/**
+ * La conversión HDR (escalar 4K 10 bits + LUT) corre en un solo hilo dentro del render (~25 cps). Para no tardar 15× la
+ * duración del video, cada tramo HDR usado se convierte antes, varios a la vez y con decodificación por hardware, a un
+ * intermedio SDR de alta calidad (x264 crf 10) en <out>/.hdr-cache; el render usa ese intermedio (ya SDR) y va normal.
+ */
+function primerCuadro(file: string, desde: number): number {
+  const p = (args: string[]) => spawnSync(FFPROBE, ['-v', 'error', '-select_streams', 'v:0', ...args, '-of', 'csv=p=0', file], { encoding: 'utf8' }).stdout
+  const t0 = Number.parseFloat(p(['-show_entries', 'stream=start_time'])) || 0
+  const ts = p(['-read_intervals', `${(desde + t0).toFixed(3)}%+0.3`, '-show_entries', 'frame=best_effort_timestamp_time'])
+    .split('\n').map((x) => Number.parseFloat(x)).filter((x) => Number.isFinite(x)).map((x) => x - t0).sort((a, b) => a - b)
+  return ts.find((x) => x >= desde - 1e-4) ?? desde
+}
+
+async function preconvertirHdr() {
+  const fmt0 = outputs[0] === 'horizontal' ? [1920, 1080] : [1080, 1920]
+  const cache = join(outDir, '.hdr-cache')
+  mkdirSync(cache, { recursive: true })
+  const trabajos: Array<() => Promise<void>> = []
+  manifest.clips.forEach((c, i) => {
+    const hdr = clipHdr[i]
+    if (!hdr) return
+    const desde = Math.max(0, c.trimIn - 0.5)
+    const hasta = c.trimOut + 0.5
+    const destino = join(cache, `${basename(inputNames[i]).replace(/\.[^.]+$/, '')}-${desde.toFixed(3)}-${hasta.toFixed(3)}-${fmt0[0]}x${fmt0[1]}.mp4`)
+    const usar = () => {
+      // el intermedio empieza en el primer cuadro de la toma que cae en `desde` o después (rejilla de 59.94): se mide
+      // para no correr el video un cuadro respecto a la voz
+      const f0 = primerCuadro(inputNames[i], desde)
+      inputNames[i] = destino
+      clipHdr[i] = null
+      manifest.clips[i] = {
+        ...c,
+        trimIn: c.trimIn - f0,
+        trimOut: c.trimOut - f0,
+        cuts: c.cuts?.map((k) => ({ from: k.from - f0, to: k.to - f0 })),
+      }
+    }
+    if (existsSync(destino) && statSync(destino).mtimeMs > statSync(inputNames[i]).mtimeMs) return usar()
+    const vf =
+      `scale=${fmt0[0]}:${fmt0[1]}:force_original_aspect_ratio=increase:in_color_matrix=bt2020:in_range=tv:out_range=pc,format=gbrp16le,` +
+      `lut3d=file='${LUT_DIR}/${hdr}-a-bt709.cube':interp=tetrahedral,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,` +
+      `setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`
+    const args = ['-v', 'error', '-y', '-hwaccel', 'videotoolbox', '-ss', desde.toFixed(3), '-to', hasta.toFixed(3), '-i', inputNames[i],
+      '-vf', vf, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '10', '-pix_fmt', 'yuv420p', '-color_primaries', 'bt709',
+      '-color_trc', 'bt709', '-colorspace', 'bt709', '-c:a', 'copy', destino + '.tmp.mp4']
+    trabajos.push(
+      () =>
+        new Promise((ok, mal) => {
+          const p = spawn(FFMPEG, args, { stdio: ['ignore', 'ignore', 'pipe'] })
+          let err = ''
+          p.stderr.on('data', (d) => (err = (err + d).slice(-2000)))
+          p.on('close', (code) => {
+            if (code !== 0) return mal(new Error(`conversión HDR de ${c.file} falló:\n${err}`))
+            renameSync(destino + '.tmp.mp4', destino)
+            usar()
+            ok()
+          })
+        }),
+    )
+  })
+  if (!trabajos.length) return
+  const t0 = Date.now()
+  const N = Math.min(6, trabajos.length)
+  let k = 0
+  await Promise.all(Array.from({ length: N }, async () => { while (k < trabajos.length) await trabajos[k++]() }))
+  console.log(`  ${trabajos.length} tramos HDR convertidos en ${((Date.now() - t0) / 1000).toFixed(0)}s (${N} a la vez)`)
+}
+
 // ---- render ----
 const totalDur = outputDuration(manifest)
 
 function render(format: (typeof outputs)[number]): Promise<string> {
   const outPath = join(outDir, outputFileName(manifest, format))
-  const args = buildArgs(manifest, { format, encoder, inputNames, clipHasAudio, outputName: outPath })
+  const args = buildArgs(manifest, { format, encoder, inputNames, clipHasAudio, clipHdr, lutDir: LUT_DIR, outputName: outPath })
   args.push('-progress', 'pipe:1', '-nostats')
 
   return new Promise((resolvePromise, reject) => {

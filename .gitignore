@@ -23,3 +23,11 @@ dist-ssr
 *.sln
 *.sw?
 public/ffmpeg
+
+# Video Assembler: salidas y cachés locales
+*.err
+ejemplo/medios/
+.proxies/
+.hdr-cache/
+.biblioteca/
+cli/animaciones/_html/

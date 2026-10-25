@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Manifest, OutputFormat } from './lib/types.ts'
 import { keepIntervals } from './lib/graph.ts'
 import type { BinItem, ClipState, OverlayState, Selection, TrackState } from './state.ts'
@@ -32,7 +32,8 @@ import {
 } from './lib/mediaFolder.ts'
 import { TopBar } from './components/TopBar.tsx'
 import { MediaBin } from './components/MediaBin.tsx'
-import { PreviewPane } from './components/PreviewPane.tsx'
+import { PreviewPane, type PlayerHandle } from './components/PreviewPane.tsx'
+import { CompararPane, MAX_COMPARAR } from './components/CompararPane.tsx'
 import { Inspector } from './components/Inspector.tsx'
 import { TimelinePane } from './components/TimelinePane.tsx'
 
@@ -87,7 +88,11 @@ export default function App() {
   }
 
   // controles del preview, registrados por PreviewPane (para la barra espaciadora)
-  const playerRef = useRef<{ toggle: () => void; seek: (t: number) => void } | null>(null)
+  const playerRef = useRef<PlayerHandle | null>(null)
+  const [comparar, setComparar] = useState<Manifest[] | null>(null)
+  // capas con escena HTML: verlas en vivo (motor) o su .webm grabado
+  const [vivo, setVivo] = useState(true)
+  const [manifestId, setManifestId] = useState(0)
 
   // ---- biblioteca de archivos ----
 
@@ -96,8 +101,28 @@ export default function App() {
    * nombre por la versión nueva: un archivo que cambió en disco después de abrirse deja
    * de ser legible para el navegador y hay que volver a leerlo.
    */
+  /** Escenas HTML del motor: se leen como texto y se sirven al iframe de la vista previa como blob */
+  const htmlFiles = useRef(new Map<string, string>())
+  const attachHtml = async (files: File[]) => {
+    for (const f of files) {
+      const prev = htmlFiles.current.get(f.name)
+      if (prev) URL.revokeObjectURL(prev)
+      htmlFiles.current.set(f.name, URL.createObjectURL(new Blob([await f.text()], { type: 'text/html' })))
+    }
+    setOverlays((prev) => prev.map((o) => (o.html && htmlFiles.current.has(baseName(o.html)) ? { ...o, htmlUrl: htmlFiles.current.get(baseName(o.html)) } : o)))
+  }
+  const resolveHtml = async (refs: string[]) => {
+    const handle = folderRef.current
+    if (!handle || refs.length === 0 || (await folderPermission(handle)) !== 'granted') return
+    void attachHtml(await findFilesByName(handle, refs))
+  }
+
   const addFiles = (list: FileList | File[] | null, replace = false) => {
     if (!list || list.length === 0) return
+    const htmls = Array.from(list).filter((f) => /\.html?$/i.test(f.name))
+    if (htmls.length) void attachHtml(htmls)
+    list = Array.from(list).filter((f) => !/\.html?$/i.test(f.name))
+    if (list.length === 0) return
     const prepared = Array.from(list).map((file) => ({
       file,
       url: URL.createObjectURL(file),
@@ -168,7 +193,7 @@ export default function App() {
       ...clips.filter((c) => !c.media).map((c) => c.file),
       ...(voice && !voice.media ? [voice.file] : []),
       ...(music && !music.media ? [music.file] : []),
-      ...overlays.filter((o) => !o.media).map((o) => o.file),
+      ...overlays.filter((o) => !o.media && !o.htmlUrl).map((o) => o.file),
     ].filter((v, i, arr) => arr.indexOf(v) === i)
   }
 
@@ -230,7 +255,13 @@ export default function App() {
   }, [])
 
   // drag & drop sobre toda la ventana: manifiesto .json o archivos de medios
-  const dropHandlers = useRef<{ loadManifest: (m: Manifest) => void; addFiles: (f: File[]) => void } | null>(null)
+  const dropHandlers = useRef<{
+    loadManifest: (m: Manifest) => void
+    addFiles: (f: File[]) => void
+    comparar: (ms: Manifest[]) => void
+    /** Con el modo de comparar abierto, los manifiestos soltados se suman a los paneles */
+    agregarComparar: ((ms: Manifest[]) => void) | null
+  } | null>(null)
 
   useEffect(() => {
     let depth = 0
@@ -256,9 +287,21 @@ export default function App() {
       const files = Array.from(e.dataTransfer?.files ?? [])
       if (files.length === 0) return
       setDropError('')
-      const manifestFile = files.find((f) => f.name.toLowerCase().endsWith('.json'))
+      const jsons = files.filter((f) => f.name.toLowerCase().endsWith('.json'))
+      const manifestFile = jsons[0]
       const media = files.filter((f) => !f.name.toLowerCase().endsWith('.json'))
-      if (manifestFile) {
+      const agregar = dropHandlers.current?.agregarComparar
+      if (jsons.length > 1 || (agregar && jsons.length)) {
+        // de 2 a 4 manifiestos a la vez → modo de comparar (o, si ya está abierto, se suman a sus paneles)
+        void Promise.all(jsons.slice(0, MAX_COMPARAR).map((f) => f.text().then((t) => JSON.parse(t) as Manifest)))
+          .then((ms) => {
+            const validos = ms.filter((m) => Array.isArray(m.clips))
+            if (validos.length < ms.length) setDropError('Algún JSON soltado no parece un manifiesto (falta "clips")')
+            if (agregar) agregar(validos)
+            else dropHandlers.current?.comparar(validos)
+          })
+          .catch((err) => setDropError(`Algún JSON no parece un manifiesto (${err instanceof Error ? err.message : err})`))
+      } else if (manifestFile) {
         void manifestFile.text().then((text) => {
           try {
             const m = JSON.parse(text) as Manifest
@@ -269,7 +312,7 @@ export default function App() {
           }
         })
       }
-      if (media.length > 0) dropHandlers.current?.addFiles(media)
+      if (media.length > 0 && !agregar) dropHandlers.current?.addFiles(media)
     }
     window.addEventListener('dragenter', onDragEnter)
     window.addEventListener('dragover', onDragOver)
@@ -441,6 +484,7 @@ export default function App() {
       const tgt = e.target as HTMLElement
       if (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.isContentEditable) return
       if (document.querySelector('.modal-overlay')) return // no editar con un modal abierto
+      if (document.querySelector('.comparar')) return // el modo de comparar tiene sus propias teclas
       if ((e.metaKey || e.ctrlKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
         undo()
@@ -472,6 +516,9 @@ export default function App() {
   // ---- manifiesto ----
 
   const loadManifest = (m: Manifest) => {
+    // primero se detiene lo que esté sonando (ver PreviewPane: manifestId)
+    playerRef.current?.stop()
+    setManifestId((n) => n + 1)
     setName(m.name || 'mi-video')
     setOutputs(m.outputs?.length ? m.outputs : ['vertical'])
 
@@ -530,6 +577,11 @@ export default function App() {
     setPlayhead(0)
     // si hay carpeta conectada, carga los archivos referenciados sin intervención
     setTimeout(() => void resolveFromFolder(fullRefs, true), 0)
+    const htmlRefs = (m.overlays ?? []).filter((o) => o.html).map((o) => o.html as string)
+    setTimeout(() => {
+      void resolveHtml(htmlRefs)
+      void attachHtml([]) // las que ya estaban cargadas (soltadas a mano) se reconectan
+    }, 0)
   }
 
   // ---- autoguardado en el navegador ----
@@ -577,7 +629,13 @@ export default function App() {
     setRestored(false)
   }
 
-  dropHandlers.current = { loadManifest, addFiles }
+  const abrirComparar = (ms: Manifest[]) => {
+    playerRef.current?.stop()
+    setComparar(ms)
+  }
+  const agregarComparar = (ms: Manifest[]) => setComparar((prev) => [...(prev ?? []), ...ms].slice(0, MAX_COMPARAR))
+  dropHandlers.current = { loadManifest, addFiles, comparar: abrirComparar, agregarComparar: comparar ? agregarComparar : null }
+  const cargados = useMemo(() => new Map(bin.filter((b) => b.media).map((b) => [b.name, b.media as File])), [bin])
 
   // ---- derivados ----
 
@@ -595,7 +653,7 @@ export default function App() {
     ...clips.filter((c) => !c.media).map((c) => baseName(c.file)),
     ...(voice && !voice.media ? [baseName(voice.file)] : []),
     ...(music && !music.media ? [baseName(music.file)] : []),
-    ...overlays.filter((o) => !o.media).map((o) => baseName(o.file)),
+    ...overlays.filter((o) => !o.media && !o.htmlUrl).map((o) => baseName(o.file)),
   ].filter((v, i, arr) => arr.indexOf(v) === i)
 
   // la carpeta puede conectarse después de restaurar el autosave: intenta resolver faltantes
@@ -622,7 +680,15 @@ export default function App() {
         overlays={overlays}
         missing={missing}
         onLoadManifest={loadManifest}
+        onComparar={() => abrirComparar([])}
       />
+      {overlays.some((o) => o.htmlUrl && o.url) && (
+        <div className="banner banner-info">
+          Capas del motor: <button className={`small ${vivo ? 'primary' : ''}`} onClick={() => setVivo(true)}>En vivo</button>
+          <button className={`small ${vivo ? '' : 'primary'}`} onClick={() => setVivo(false)}>Grabado</button>
+        </div>
+      )}
+      {comparar && <CompararPane manifests={comparar} onManifests={setComparar} folder={folder} loaded={cargados} onClose={() => setComparar(null)} />}
 
       {folderPrompt && missing.length > 0 && folder && (
         <div className="banner banner-info">
@@ -641,7 +707,9 @@ export default function App() {
         </div>
       )}
       {dragOver && (
-        <div className="drop-overlay">📥 Suelta aquí tu manifiesto (.json) o archivos de video/audio</div>
+        <div className="drop-overlay">
+          {comparar ? `📥 Suelta aquí los manifiestos a comparar (hasta ${MAX_COMPARAR})` : '📥 Suelta aquí tu manifiesto (.json) o archivos de video/audio'}
+        </div>
       )}
       {dropError && (
         <div className="banner">
@@ -692,6 +760,8 @@ export default function App() {
           onClipChange={updateClip}
           playerRef={playerRef}
           onMediaError={healMedia}
+          manifestId={manifestId}
+          vivo={vivo}
         />
         {selClip ? (
           <Inspector

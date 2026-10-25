@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { OverlayPosition } from '../lib/types.ts'
 import type { ClipState, OverlayState, TrackState } from '../state.ts'
-import { clipAt, clipOutOffsetAt, clipOutSeconds, formatTime, trackOutSeconds, trackSourceTimeAt } from '../state.ts'
+import { clipAt, clipOutOffsetAt, clipOutSeconds, formatTime, trackOutAt, trackOutSeconds, trackSourceTimeAt } from '../state.ts'
 import { keepIntervals } from '../lib/graph.ts'
+import { HtmlOverlay } from './HtmlOverlay.tsx'
 
 /** Posición CSS de una capa dentro del cuadro del video (margen 3%) */
 function overlayStyle(o: OverlayState): React.CSSProperties {
@@ -25,6 +26,31 @@ function overlayStyle(o: OverlayState): React.CSSProperties {
   return st
 }
 
+/** Llama `fn` en cada cuadro de pantalla hasta que se llame a la función devuelta */
+function cadaCuadro(fn: () => void): () => void {
+  let vivo = true // `fn` puede detenerlo desde dentro (fin del clip): no volver a pedir cuadro
+  let id = requestAnimationFrame(function paso() {
+    fn()
+    if (vivo) id = requestAnimationFrame(paso)
+  })
+  return () => {
+    vivo = false
+    cancelAnimationFrame(id)
+  }
+}
+
+/** Control de reproducción que el reproductor registra para App (barra espaciadora) y para el modo de comparar */
+export interface PlayerHandle {
+  toggle: () => void
+  seek: (t: number) => void
+  stop: () => void
+  /** Reproduce desde el segundo t del video final */
+  play: (t: number) => void
+  isPlaying: () => boolean
+  /** Tiempo exacto del video final (el cursor solo se actualiza ~4 veces por segundo) */
+  ahora: () => number
+}
+
 interface Props {
   clip: ClipState | null
   clips: ClipState[]
@@ -37,16 +63,23 @@ interface Props {
   onPlayhead: (t: number) => void
   onClipChange: (id: string, patch: Partial<ClipState>) => void
   /** App registra aquí el control de reproducción (barra espaciadora) */
-  playerRef: React.MutableRefObject<{ toggle: () => void; seek: (t: number) => void } | null>
+  playerRef: React.MutableRefObject<PlayerHandle | null>
+  /** Sube cada vez que se carga un manifiesto: la reproducción en curso se detiene y se limpia */
+  manifestId?: number
+  /** Capas con escena HTML (motor): verlas en vivo (default) o su .webm grabado si existe */
+  vivo?: boolean
   /** Un archivo dejó de poder leerse (típicamente porque cambió en disco) */
   onMediaError: () => void
 }
 
-export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhead, onPlayhead, onClipChange, playerRef, onMediaError }: Props) {
+export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhead, onPlayhead, onClipChange, playerRef, onMediaError, manifestId, vivo = true }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const voiceRef = useRef<HTMLAudioElement>(null)
   const musicRef = useRef<HTMLAudioElement>(null)
   const [seq, setSeq] = useState<number | null>(null) // índice del clip sonando al reproducir la timeline
+  // copia síncrona de `seq`: un `timeupdate` que llega justo después de detener no debe mover el cursor
+  const seqRef = useRef<number | null>(null)
+  seqRef.current = seq
   const [audioOnly, setAudioOnly] = useState(false) // reproduciendo solo voz/música (sin clips)
   const audioCleanups = useRef<Array<() => void>>([])
   // listener activo del clip en reproducción: debe existir UNO solo a la vez
@@ -79,6 +112,19 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id])
 
+  // con el <video> reusado no vuelve a llegar loadedmetadata: el clip nuevo de la misma toma toma los datos de aquí
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !active || seq != null || active.duration !== 0 || v.readyState < 1) return
+    onClipChange(active.id, {
+      duration: v.duration,
+      width: v.videoWidth,
+      height: v.videoHeight,
+      trimOut: active.trimOut > 0 ? Math.min(active.trimOut, v.duration) : v.duration,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.id])
+
   // el cursor del timeline manda cuando no se está reproduciendo
   useEffect(() => {
     const v = videoRef.current
@@ -98,13 +144,18 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
         el.pause()
         continue
       }
-      const t = o.trimIn + (playhead - o.start)
       if (seq != null) {
+        // corren solas, pero se recolocan si se separan del video: si no, una capa larga (los subtítulos) se iba adelantando
+        // porque el video y la voz pierden unas décimas en cada corte y la capa no
+        const t = o.trimIn + (ahoraRef.current() - o.start)
         if (el.paused) {
           el.currentTime = t
           el.play().catch(() => {})
+        } else if (Math.abs(el.currentTime - t) > 0.12) {
+          el.currentTime = t
         }
       } else {
+        const t = o.trimIn + (playhead - o.start)
         el.pause()
         if (Math.abs(el.currentTime - t) > 0.05) el.currentTime = t
       }
@@ -112,6 +163,13 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     if (seq == null) return
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playhead, seq, overlays])
+
+  /** Reloj de la reproducción: el segundo del video final según la voz, que suena continua (null si no hay voz sonando) */
+  const relojVoz = (): number | null => {
+    const el = voiceRef.current
+    if (!el || el.paused || !voice?.url) return null
+    return trackOutAt(voice, el.currentTime)
+  }
 
   /** Quita listeners y pausa todo, sin tocar el estado de la secuencia */
   const haltMedia = () => {
@@ -127,9 +185,20 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
 
   const stopAll = () => {
     haltMedia()
+    for (const el of overlayRefs.current.values()) el.pause()
+    seqRef.current = null
     setSeq(null)
     setAudioOnly(false)
   }
+
+  // manifiesto nuevo: sin esto el índice `seq` sobrevive, el efecto de `seq` no se re-dispara y el reproductor queda
+  // «reproduciendo» con el listener del clip viejo y medios sin fuente (se congelaba hasta dar pausa y play)
+  useEffect(() => {
+    if (!manifestId) return
+    stopAll()
+    onPlayhead(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manifestId])
 
   /** Arranca una pista saltándose sus cortes; si es la guía, mueve el cursor y detiene al final */
   const startTrack = (el: HTMLAudioElement, track: TrackState, fromOut: number, driver: boolean): boolean => {
@@ -167,7 +236,9 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     }
     el.addEventListener('timeupdate', onTime)
     el.addEventListener('ended', onEnded)
+    const parar = cadaCuadro(onTime)
     audioCleanups.current.push(() => {
+      parar()
       el.removeEventListener('timeupdate', onTime)
       el.removeEventListener('ended', onEnded)
     })
@@ -200,7 +271,11 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
       }
     }
     v.addEventListener('timeupdate', onTime)
-    clipCleanup.current = () => v.removeEventListener('timeupdate', onTime)
+    const parar = cadaCuadro(onTime)
+    clipCleanup.current = () => {
+      parar()
+      v.removeEventListener('timeupdate', onTime)
+    }
     v.play().catch(() => {}) // pausa inmediata: no es error
   }
 
@@ -217,12 +292,36 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
       setSeq(null)
       return
     }
-    const start = startSrcRef.current?.index === seq ? startSrcRef.current.src : undefined
+    let start = startSrcRef.current?.index === seq ? startSrcRef.current.src : undefined
     startSrcRef.current = null
+    if (start === undefined) {
+      // cambio de clip en plena reproducción: entra en el punto donde ya va la voz (arrancar en su trimIn atrasaba ~0.1 s por corte)
+      const r = relojVoz()
+      const hit = r != null ? clipAt(clips, r) : null
+      if (hit?.index === seq) start = hit.src
+    }
     const id = requestAnimationFrame(() => {
       playClip(c, advance, start)
     })
     return () => cancelAnimationFrame(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seq])
+
+  // el video sigue a la voz: si se separa más de 0.12 s (carga lenta, un cuadro clave lejos) se recoloca, como mucho 1 vez/s
+  useEffect(() => {
+    if (seq == null) return
+    let ultimo = performance.now()
+    return cadaCuadro(() => {
+      const v = videoRef.current
+      const r = relojVoz()
+      if (!v || r == null || v.paused || v.seeking || performance.now() - ultimo < 1000) return
+      const hit = clipAt(clips, r)
+      if (hit?.index !== seq) return // ya toca otro clip: lo cambia `advance`
+      const vt = clips.slice(0, seq).reduce((s, c) => s + clipOutSeconds(c), 0) + clipOutOffsetAt(clips[seq], v.currentTime)
+      if (Math.abs(r - vt) < 0.12) return
+      ultimo = performance.now()
+      v.currentTime = hit.src
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seq])
 
@@ -284,6 +383,10 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
     seek: (t: number) => {
       if (playing) playFrom(t)
     },
+    stop: stopAll,
+    play: (t: number) => playFrom(t),
+    isPlaying: () => playing,
+    ahora: () => ahoraRef.current(),
   }
 
   const playSegment = () => {
@@ -295,7 +398,7 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
 
   const handleTimeUpdate = (t: number) => {
     setTime(t)
-    if (seq != null && active) {
+    if (seq != null && seqRef.current != null && active) {
       const base = clips.slice(0, seq).reduce((s, c) => s + clipOutSeconds(c), 0)
       onPlayhead(base + clipOutOffsetAt(active, t))
     }
@@ -303,13 +406,25 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
 
   const segDuration = active ? clipOutSeconds(active) : 0
 
+  // tiempo exacto del video final (para las escenas en vivo); vía ref para no quedar con un `seq` viejo
+  const ahoraRef = useRef<() => number>(() => playhead)
+  ahoraRef.current = () => {
+    const r = seq != null ? relojVoz() : null
+    if (r != null) return r
+    const v = videoRef.current
+    if (seq != null && v && active) return clips.slice(0, seq).reduce((s, c) => s + clipOutSeconds(c), 0) + clipOutOffsetAt(active, v.currentTime)
+    return playhead
+  }
+  const ahora = useRef(() => ahoraRef.current()).current
+
   return (
     <section className="preview-pane">
       <div className="preview-stage">
         {active?.url ? (
           <div className="preview-wrap" ref={wrapRef}>
           <video
-            key={active.id}
+            // por archivo, no por clip: los cortes seguidos de la misma toma reusan el <video> (sin recargar ni cuadro en negro)
+            key={active.url}
             ref={videoRef}
             src={active.url}
             className="preview-video"
@@ -336,7 +451,12 @@ export function PreviewPane({ clip, clips, voice, music, overlays, scrub, playhe
           {frame && (
             <div className="preview-frame" style={frame}>
               {overlays.map((o) =>
-                o.url ? (
+                o.htmlUrl && (vivo || !o.url) ? (
+                  // solo se montan las escenas cercanas al cursor (Chrome limita los contextos WebGL)
+                  playhead >= o.start - 5 && playhead <= o.end + 2 ? (
+                    <HtmlOverlay key={o.id} overlay={o} width={frame.width} playhead={playhead} playing={playing} ahora={ahora} />
+                  ) : null
+                ) : o.url ? (
                   <video
                     key={o.id}
                     muted

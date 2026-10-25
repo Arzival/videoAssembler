@@ -59,6 +59,7 @@ Un manifiesto es un archivo **JSON** que describe la receta completa de un video
 | `speed` | número | 1.0 | Velocidad de reproducción, rango práctico 0.5–2.0. Afecta video y audio (el audio se corrige con `atempo`, mantiene tono y sincronía). |
 | `keepAudio` | booleano | false | `true` = el audio original del clip entra a la mezcla final. `false` = clip mudo. |
 | `audioVolume` | número | 1.0 | Volumen del audio del clip (0–2, 1 = 100%). Solo aplica si `keepAudio` es `true`. |
+| `fit` | `"contain"` \| `"cover"` | `"contain"` | Cómo entra el clip al formato de salida. `contain` = completo, con el mismo video desenfocado de fondo donde sobra espacio; `cover` = llena el cuadro recortando lo que sobra (centrado), útil para clips 4:3 en vertical. |
 | `cuts` | array de `{from, to}` | `[]` | Rangos internos a **eliminar**, ver §3. |
 
 ### Pista de audio (voice / music)

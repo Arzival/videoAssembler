@@ -86,7 +86,9 @@ export function ManifestHelp({ onClose }: Props) {
             Tiempos en segundos del archivo original. <code>cuts</code> son pedazos internos que se eliminan
             (lo que haces con la tecla S) y el material se re-empata solo. <code>trimOut: null</code> en audio
             = hasta el final. También hay <code>overlays</code>: capas de video encima del principal (botón
-            «+ Capa» en Archivos), con su rango de aparición, tamaño y posición.
+            «+ Capa» en Archivos), con su rango de aparición, tamaño y posición. Si una capa trae <code>html</code> (escena del
+            motor de animaciones), aquí se ve <strong>en vivo</strong> sin haberla grabado; el render usa su <code>file</code>.
+            Con <strong>Comparar</strong> ves hasta 4 manifiestos a la vez.
           </p>
 
           <h4>🤖 Trabajarlo con IA (Claude Code)</h4>

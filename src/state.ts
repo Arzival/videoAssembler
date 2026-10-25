@@ -1,4 +1,4 @@
-import type { AudioSpec, ClipSpec, Cut, Manifest, OutputFormat, OverlayPosition, OverlaySpec } from './lib/types.ts'
+import type { AudioSpec, ClipFit, ClipSpec, Cut, Manifest, OutputFormat, OverlayPosition, OverlaySpec } from './lib/types.ts'
 import { keepIntervals } from './lib/graph.ts'
 
 export interface ClipState {
@@ -15,6 +15,7 @@ export interface ClipState {
   keepAudio: boolean
   audioVolume: number
   cuts: Cut[]
+  fit: ClipFit
 }
 
 export interface TrackState {
@@ -47,6 +48,7 @@ export function clipFromFile(file: File): ClipState {
     keepAudio: false,
     audioVolume: 1,
     cuts: [],
+    fit: 'contain',
   }
 }
 
@@ -65,6 +67,7 @@ export function clipFromSpec(spec: ClipSpec): ClipState {
     keepAudio: spec.keepAudio ?? false,
     audioVolume: spec.audioVolume ?? 1,
     cuts: spec.cuts ?? [],
+    fit: spec.fit ?? 'contain',
   }
 }
 
@@ -110,6 +113,9 @@ export interface OverlayState {
   trimIn: number
   scale: number
   position: OverlayPosition
+  /** Escena HTML del motor (ruta del manifiesto) y su blob listo para el iframe de la vista previa en vivo */
+  html?: string
+  htmlUrl?: string | null
 }
 
 export function buildManifest(
@@ -130,6 +136,7 @@ export function buildManifest(
       keepAudio: c.keepAudio,
       audioVolume: c.audioVolume,
       ...(c.cuts.length > 0 ? { cuts: c.cuts } : {}),
+      ...(c.fit === 'cover' ? { fit: c.fit } : {}),
     })),
     voice: voice ? trackSpec(voice) : null,
     music: music ? trackSpec(music) : null,
@@ -142,6 +149,7 @@ export function buildManifest(
             trimIn: Math.round(o.trimIn * 1000) / 1000,
             scale: Math.round(o.scale * 100) / 100,
             position: o.position,
+            ...(o.html ? { html: o.html } : {}),
           })),
         }
       : {}),
@@ -161,6 +169,7 @@ export function overlayFromSpec(spec: OverlaySpec): OverlayState {
     trimIn: spec.trimIn ?? 0,
     scale: spec.scale ?? 0.35,
     position: spec.position ?? 'top-right',
+    ...(spec.html ? { html: spec.html, htmlUrl: null } : {}),
   }
 }
 
@@ -173,6 +182,7 @@ function trackSpec(t: TrackState): AudioSpec {
     ...(t.cuts.length > 0 ? { cuts: t.cuts } : {}),
   }
 }
+
 
 /** Acepta "83", "83.5" o "1:23.5" y devuelve segundos */
 export function parseTime(input: string): number | null {
@@ -264,6 +274,7 @@ export function clipFromBin(item: BinItem): ClipState {
     keepAudio: false,
     audioVolume: 1,
     cuts: [],
+    fit: 'contain',
   }
 }
 
@@ -354,6 +365,17 @@ export function trackSourceTimeAt(t: TrackState, time: number): number | null {
     remaining -= len
   }
   return null
+}
+
+/** Inverso de trackSourceTimeAt: dado un tiempo del archivo de la pista, segundo del video final */
+export function trackOutAt(t: TrackState, src: number): number {
+  let out = 0
+  for (const [a, b] of keepIntervals(t.trimIn, t.trimOut ?? t.duration, t.cuts)) {
+    if (src <= a) break
+    out += Math.min(src, b) - a
+    if (src <= b) break
+  }
+  return out
 }
 
 /** Inverso de clipSourceTimeAt: dado un tiempo fuente dentro del clip, offset de salida en el timeline */

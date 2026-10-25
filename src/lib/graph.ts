@@ -16,6 +16,10 @@ export interface BuildOptions {
   inputNames: string[]
   /** Por clip: si el archivo realmente tiene pista de audio (default: true) */
   clipHasAudio?: boolean[]
+  /** Por clip: tomas HDR (HLG del iPhone o PQ) que hay que pasar a SDR BT.709 con la LUT de `lutDir` */
+  clipHdr?: Array<'hlg' | 'pq' | null>
+  /** Carpeta con hlg-a-bt709.cube / pq-a-bt709.cube (cli/luts) */
+  lutDir?: string
   outputName: string
 }
 
@@ -106,12 +110,15 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
     speed: number
     useAudio: boolean
     audioVolume: number
+    cover: boolean
+    hdr: 'hlg' | 'pq' | null
   }
   const segs: Seg[] = []
   m.clips.forEach((c, i) => {
     const hasAudio = o.clipHasAudio ? o.clipHasAudio[i] !== false : true
     for (const [from, to] of keepIntervals(c.trimIn, c.trimOut, c.cuts)) {
-      segs.push({ input: i, from, to, speed: c.speed, useAudio: c.keepAudio && hasAudio, audioVolume: c.audioVolume })
+      const hdr = (o.lutDir && o.clipHdr?.[i]) || null
+      segs.push({ input: i, from, to, speed: c.speed, useAudio: c.keepAudio && hasAudio, audioVolume: c.audioVolume, cover: c.fit === 'cover', hdr })
     }
   })
   if (segs.length === 0) throw new Error('El manifiesto no tiene clips (o los cortes eliminan todo)')
@@ -120,14 +127,27 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
 
   segs.forEach((s, j) => {
     const dur = (s.to - s.from) / s.speed
+    // HDR → SDR: se reduce primero (la LUT corre sobre 1080p, no sobre 4K) y la conversión de matriz la hace ese mismo scale
+    const sdr = s.hdr
+      ? `,scale=${w}:${h}:force_original_aspect_ratio=increase:in_color_matrix=bt2020:in_range=tv:out_range=pc,format=gbrp16le,` +
+        `lut3d=file='${o.lutDir}/${s.hdr}-a-bt709.cube':interp=tetrahedral,scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,` +
+        `setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv`
+      : ''
     parts.push(
       `[${s.input}:v:0]trim=start=${fmt(s.from)}:end=${fmt(s.to)},` +
-        `setpts=(PTS-STARTPTS)/${fmt(s.speed)},fps=${FPS},split=2[c${j}a][c${j}b]`,
-      `[c${j}a]scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1[c${j}fg]`,
-      `[c${j}b]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,` +
-        `boxblur=luma_radius=24:luma_power=2:chroma_radius=12:chroma_power=2[c${j}bg]`,
-      `[c${j}bg][c${j}fg]overlay=x=(main_w-overlay_w)/2:y=(main_h-overlay_h)/2,format=yuv420p[v${j}]`,
+        `setpts=(PTS-STARTPTS)/${fmt(s.speed)},fps=${FPS}${sdr}` + (s.cover ? `[c${j}a]` : `,split=2[c${j}a][c${j}b]`),
     )
+    if (s.cover) {
+      // llena el cuadro de salida recortando lo que sobra (centrado), sin fondo borroso
+      parts.push(`[c${j}a]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,format=yuv420p[v${j}]`)
+    } else {
+      parts.push(
+        `[c${j}a]scale=${w}:${h}:force_original_aspect_ratio=decrease:force_divisible_by=2,setsar=1[c${j}fg]`,
+        `[c${j}b]scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,` +
+          `boxblur=luma_radius=24:luma_power=2:chroma_radius=12:chroma_power=2[c${j}bg]`,
+        `[c${j}bg][c${j}fg]overlay=x=(main_w-overlay_w)/2:y=(main_h-overlay_h)/2,format=yuv420p[v${j}]`,
+      )
+    }
     if (s.useAudio) {
       parts.push(
         `[${s.input}:a:0]atrim=start=${fmt(s.from)}:end=${fmt(s.to)},asetpts=PTS-STARTPTS,` +
@@ -198,6 +218,8 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
   } else {
     args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23')
   }
+  // salida siempre SDR BT.709 (si no, hereda la etiqueta HLG/BT.2020 de las tomas HDR y los reproductores la malinterpretan)
+  if (o.encoder !== 'wasm') args.push('-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv')
   args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-movflags', '+faststart', o.outputName)
   return args
 }

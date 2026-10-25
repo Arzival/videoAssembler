@@ -8,6 +8,9 @@
  * Salida: JSON con el texto completo y cada palabra con su inicio/fin en segundos
  * (tiempos del ARCHIVO de audio, igual que trimIn/cuts del manifiesto).
  *
+ * Audio largo (> 30 s): se parte solo en trozos de ≤ 30 s cortando en silencios (RMS < −40 dB) y cada trozo se transcribe
+ * por separado; así Whisper no se cicla ni inventa texto en audios de varios minutos. Los tiempos se devuelven del archivo.
+ *
  * Requiere: whisper-cli (brew install whisper-cpp) y ffmpeg en el PATH.
  * Modelo por defecto: ~/.cache/whisper/ggml-large-v3-turbo-q5_0.bin
  *   (descarga: https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin)
@@ -51,6 +54,52 @@ if (!existsSync(audioPath)) fail(`No existe: ${audioPath}`)
 if (!existsSync(model)) fail(`No existe el modelo: ${model}\nDescárgalo de https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin`)
 if (!outPath) outPath = `${audioPath.replace(/\.[^.]+$/, '')}.transcript.json`
 
+const MAX_TROZO = 30
+
+/** Trozos [inicio, fin] de ≤ MAX_TROZO s cortados a la mitad de silencios (RMS < −40 dB en ventanas de 25 ms) */
+function partir(wav: string): Array<[number, number]> {
+  const buf = readFileSync(wav)
+  let off = 12
+  while (off < buf.length - 8 && buf.toString('ascii', off, off + 4) !== 'data') off += 8 + buf.readUInt32LE(off + 4)
+  const datos = buf.subarray(off + 8)
+  const n = Math.floor(datos.length / 2)
+  const dur = n / 16000
+  if (dur <= MAX_TROZO) return [[0, dur]]
+  const win = 400
+  const nv = Math.floor(n / win)
+  const voz: boolean[] = []
+  for (let v = 0; v < nv; v++) {
+    let e = 0
+    for (let i = 0; i < win; i++) {
+      const x = datos.readInt16LE((v * win + i) * 2) / 32768
+      e += x * x
+    }
+    voz.push(10 * Math.log10(e / win + 1e-12) > -40)
+  }
+  // centros de silencios de ≥ 0.3 s = puntos donde se puede cortar
+  const cortes: number[] = []
+  for (let v = 0; v < nv; ) {
+    if (voz[v]) {
+      v++
+      continue
+    }
+    let w = v
+    while (w < nv && !voz[w]) w++
+    if ((w - v) * 0.025 >= 0.3) cortes.push(((v + w) / 2) * 0.025)
+    v = w
+  }
+  const out: Array<[number, number]> = []
+  let a = 0
+  while (dur - a > MAX_TROZO) {
+    const cand = cortes.filter((c) => c > a + 5 && c <= a + MAX_TROZO)
+    const b = cand.length ? cand[cand.length - 1] : a + MAX_TROZO
+    out.push([a, b])
+    a = b
+  }
+  out.push([a, dur])
+  return out
+}
+
 const tmp = mkdtempSync(join(tmpdir(), 'transcribe-'))
 try {
   // whisper necesita WAV 16 kHz mono
@@ -60,28 +109,37 @@ try {
   })
   if (conv.status !== 0) fail(`ffmpeg no pudo convertir el audio:\n${conv.stderr}`)
 
-  const prefix = join(tmp, 'result')
-  console.log('Transcribiendo… (el primer uso tarda más mientras carga el modelo)')
-  const run = spawnSync(
-    WHISPER,
-    ['-m', model, '-f', wav16, '-l', lang, '-oj', '-of', prefix, '-ml', '1', '-sow', '-np'],
-    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
-  )
-  if (run.status !== 0) fail(`whisper-cli falló:\n${(run.stderr || '').slice(-2000)}`)
-
   interface WhisperSegment {
     offsets: { from: number; to: number }
     text: string
   }
-  const raw = JSON.parse(readFileSync(`${prefix}.json`, 'utf8')) as { transcription: WhisperSegment[] }
+  const whisper = (wav: string, offset: number, k: number) => {
+    const prefix = join(tmp, `result${k}`)
+    const run = spawnSync(WHISPER, ['-m', model, '-f', wav, '-l', lang, '-oj', '-of', prefix, '-ml', '1', '-sow', '-np'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+    if (run.status !== 0) fail(`whisper-cli falló:\n${(run.stderr || '').slice(-2000)}`)
+    const raw = JSON.parse(readFileSync(`${prefix}.json`, 'utf8')) as { transcription: WhisperSegment[] }
+    return raw.transcription
+      .map((s) => ({
+        word: s.text.trim(),
+        start: Math.round(s.offsets.from + offset * 1000) / 1000,
+        end: Math.round(s.offsets.to + offset * 1000) / 1000,
+      }))
+      .filter((w) => w.word.length > 0)
+  }
 
-  const words = raw.transcription
-    .map((s) => ({
-      word: s.text.trim(),
-      start: Math.round(s.offsets.from) / 1000,
-      end: Math.round(s.offsets.to) / 1000,
-    }))
-    .filter((w) => w.word.length > 0)
+  console.log('Transcribiendo… (el primer uso tarda más mientras carga el modelo)')
+  const trozos = partir(wav16)
+  if (trozos.length > 1) console.log(`  audio largo: ${trozos.length} trozos de ≤ ${MAX_TROZO} s cortados en silencios`)
+  const words = trozos.flatMap(([a, b], k) => {
+    if (trozos.length === 1) return whisper(wav16, 0, k)
+    const part = join(tmp, `trozo${k}.wav`)
+    const c = spawnSync(FFMPEG, ['-v', 'error', '-y', '-ss', a.toFixed(3), '-to', b.toFixed(3), '-i', wav16, '-c:a', 'pcm_s16le', part], { encoding: 'utf8' })
+    if (c.status !== 0) fail(`ffmpeg no pudo partir el audio:\n${c.stderr}`)
+    return whisper(part, a, k)
+  })
 
   const text = words.map((w) => w.word).join(' ')
   const result = { audio: audioPath, language: lang, text, words }

@@ -7,6 +7,7 @@ Los contadores en JS van en window.__cnt(t_local).
 """
 import json, os, re
 import ellog as _L
+import transiciones as TRN
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 logo, at, steps = _L.logo, _L.at, _L.steps
@@ -14,6 +15,7 @@ SANS = "'Plus Jakarta Sans',-apple-system,system-ui,sans-serif"
 FONTS = ('<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800'
          '&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">')
 THREE = 'https://cdn.jsdelivr.net/npm/three@0.170.0'
+COLA = TRN.COLA  # cuánto se queda una escena debajo de la siguiente (más con TRANS)
 
 # (lienzo, lienzo2, acento, acento claro, rgb acento, tinta sobre acento)
 PALETAS = {
@@ -28,6 +30,8 @@ PALETAS = {
     'tg': ('#07203a', '#030810', '#4fb4ff', '#d6ecff', '79,180,255', '#04203a'),
     'ia': ('#160d33', '#07060f', '#a78bfa', '#e9e0ff', '167,139,250', '#160b33'),
     'amb': ('#2a1806', '#0d0803', '#ffb340', '#ffe6c2', '255,179,64', '#2a1603'),
+    # vigía de precios (video 8): amarillo Mercado Libre
+    'ml': ('#2a2405', '#0c0a02', '#ffe14d', '#fff6c2', '255,225,77', '#2a2203'),
 }
 
 
@@ -156,18 +160,18 @@ def page(css, body, dur, script='', n=0, js3d=None, salida=True, t0=0.0):
     three = ''
     if js3d:
         three = f"""<script type="importmap">{{"imports":{{"three":"{THREE}/build/three.module.js","three/addons/":"{THREE}/examples/jsm/"}}}}</script>
-<script type="module">{RUNTIME}
+<script type="module">{TRN.runtime(RUNTIME)}
 R.D={dur};R.IN=t=>R.eb(R.k(t,.2,.75));R.OUT=t=>R.eo(R.k(t,R.D-.5,.42));
 R.font=await new Promise(r=>new FontLoader().load('{THREE}/examples/fonts/helvetiker_bold.typeface.json',r));
 const update=await (async(R)=>{{{js3d}}})(R);
-const cnt=window.__seek;window.__seek=t=>{{cnt&&cnt(t);update(t+{t0});ren.render(scene,cam)}};window.__seek(0);window.__ok();
+const cnt=window.__seek;window.__seek=t=>{{cnt&&cnt(t);R.fx0&&R.fx0();update(t+{t0});R.fx&&R.fx(t);ren.render(scene,cam)}};window.__seek(0);window.__ok();
 </script>"""
     return f"""<!doctype html><html><head><meta charset="utf-8">{FONTS}
-<style>{BASE}{css}</style>
+<style>{BASE}{css}{TRN.CSS if TRN.TRANS else ''}</style>
 <script>window.__listo=new Promise(r=>window.__ok=r);window.__seek=t=>window.__cnt&&window.__cnt(t);{'' if js3d else 'window.__ok();'}</script>
-{three}</head><body><div class="{cls}" data-root style="--out:{dur - 0.4:.2f}s;--c1:{c1};--c2:{c2};--ac:{ac};--ac2:{ac2};--acr:{acr};--ink:{ink}">
+{TRN.head(TRN.cfg(dur, 'page', salida))}{three}</head><body><div class="{cls}" data-root style="--out:{dur - 0.4:.2f}s;--c1:{c1};--c2:{c2};--ac:{ac};--ac2:{ac2};--acr:{acr};--ink:{ink}">
 <div class="bg1"></div><div class="bg2"></div>{'<div id="g3"></div>' if js3d else ''}{body}<div class="grain"></div></div>
-<script>{script}</script></body></html>"""
+<script>{script}</script>{TRN.tail()}</body></html>"""
 
 
 def header(num, co_logo, co_name):
@@ -228,15 +232,15 @@ def tarjeta(css, body, dur, script='', pal='fin', js3d=None, top=200, pr=0):
     three = ''
     if js3d:
         three = f"""<script type="importmap">{{"imports":{{"three":"{THREE}/build/three.module.js","three/addons/":"{THREE}/examples/jsm/"}}}}</script>
-<script type="module">{RUNTIME}
+<script type="module">{TRN.runtime(RUNTIME)}
 R.D={dur};R.IN=t=>R.eb(R.k(t,.2,.75));R.OUT=t=>R.eo(R.k(t,R.D-.5,.42));
 R.font=await new Promise(r=>new FontLoader().load('{THREE}/examples/fonts/helvetiker_bold.typeface.json',r));
 const update=await (async(R)=>{{{js3d}}})(R);
-const cnt=window.__seek;window.__seek=t=>{{cnt&&cnt(t);update(t);ren.render(scene,cam)}};window.__seek(0);window.__ok();
+const cnt=window.__seek;window.__seek=t=>{{cnt&&cnt(t);R.fx0&&R.fx0();update(t);R.fx&&R.fx(t);ren.render(scene,cam)}};window.__seek(0);window.__ok();
 </script>"""
     return f"""<!doctype html><html><head><meta charset="utf-8">{FONTS}
-<style>{CARD}{css}</style>
+<style>{CARD}{css}{TRN.CSS if TRN.TRANS else ''}</style>
 <script>window.__listo=new Promise(r=>window.__ok=r);window.__seek=t=>window.__cnt&&window.__cnt(t);{'' if js3d else 'window.__ok();'}</script>
-{three}</head><body data-root style="--ac:{ac};--ac2:{ac2};--acr:{acr};--ink:{ink};--pr:{pr}px">
+{TRN.head(dict(TRN.cfg(dur, 'card', True), F=[540, top + 86, 300, 96]))}{three}</head><body data-root style="--ac:{ac};--ac2:{ac2};--acr:{acr};--ink:{ink};--pr:{pr}px">
 <div class="wrap" style="top:{top}px;--out:{dur - 0.45:.2f}s"><div class="card">{body}</div></div>{'<div id="g3"></div>' if js3d else ''}
-<script>{script}</script></body></html>"""
+<script>{script}</script>{TRN.tail()}</body></html>"""

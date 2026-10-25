@@ -1,0 +1,11 @@
+{
+  "name": "ejemplo",
+  "clips": [
+    { "file": "medios/toma1.mp4", "trimIn": 0.5, "trimOut": 5, "speed": 1, "keepAudio": false, "audioVolume": 1 },
+    { "file": "medios/toma2.mp4", "trimIn": 0, "trimOut": 6, "speed": 1, "keepAudio": false, "audioVolume": 1,
+      "cuts": [{ "from": 2, "to": 3 }] }
+  ],
+  "voice": { "file": "medios/voz.wav", "trimIn": 0, "trimOut": null, "volume": 1, "cuts": [{ "from": 2, "to": 3 }] },
+  "music": { "file": "medios/musica.m4a", "trimIn": 0, "trimOut": null, "volume": 0.15 },
+  "outputs": ["vertical"]
+}

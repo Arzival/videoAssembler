@@ -130,15 +130,38 @@ async function fileByPath(handle: DirHandle, relPath: string): Promise<File | nu
   }
 }
 
+/** Versión ligera de un clip (cli/proxies.py): misma ruta con .proxies/ antes del nombre y el mismo nombre de archivo */
+async function proxyOf(handle: DirHandle, ref: string): Promise<File | null> {
+  if (!ref.includes('/') || /\.(webm|wav|mp3|m4a|aac|ogg|flac)$/i.test(ref)) return null
+  const parts = ref.split('/')
+  return fileByPath(handle, [...parts.slice(0, -1), '.proxies', parts[parts.length - 1]].join('/'))
+}
+
+/** Las versiones ligeras que existan para estas referencias (ref → archivo) */
+export async function findProxies(handle: DirHandle, refs: string[]): Promise<Map<string, File>> {
+  const out = new Map<string, File>()
+  for (const ref of refs) {
+    const f = await proxyOf(handle, ref)
+    if (f) out.set(ref, f)
+  }
+  return out
+}
+
 /**
  * Busca archivos dentro de la carpeta conectada. Cada referencia se intenta
  * primero como RUTA exacta (evita ambigüedad con nombres repetidos en
  * subcarpetas); si no existe tal ruta, se busca recursivamente por nombre.
+ * Con `proxies`, los clips de video se buscan antes en `<carpeta>/.proxies/` (solo para ver, nunca para exportar).
  */
-export async function findFilesByName(handle: DirHandle, refs: string[]): Promise<File[]> {
+export async function findFilesByName(handle: DirHandle, refs: string[], opts: { proxies?: boolean } = {}): Promise<File[]> {
   const out: File[] = []
   const byName = new Set<string>()
   for (const ref of refs) {
+    const prox = opts.proxies ? await proxyOf(handle, ref) : null
+    if (prox) {
+      out.push(prox)
+      continue
+    }
     if (ref.includes('/')) {
       const f = await fileByPath(handle, ref)
       if (f) {
