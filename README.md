@@ -141,11 +141,12 @@ La captura es cuadro por cuadro con `window.__seek(s)`, sale en VP9 con alfa y r
 ### 5. Render (CLI)
 
 ```bash
-node cli/render.ts seccion/N/manifest.json --base ~/Videos [--out seccion/N/final] [--encoder videotoolbox|x264]
+node cli/render.ts seccion/N/manifest.json --base ~/Videos [--out seccion/N/final] [--encoder maxima|videotoolbox|x264]
 ```
 
-- **Encoder:** `videotoolbox` (hardware) por defecto en macOS, `x264` en otros sistemas.
-- **Salida:** 60 fps, H.264 High a 20 Mbps, AAC.
+- **Encoder:** `maxima` por defecto (x264 lento, CRF 14, AAC 320k): un solo archivo final, el de mejor calidad, para todas las
+  redes. `videotoolbox` (hardware, macOS) es rápido para pruebas; `x264` es intermedio.
+- **Salida:** 60 fps, H.264 High, etiquetado BT.709.
 - **Formatos:** `outputs` admite `vertical` (1080×1920) y `horizontal` (1920×1080).
 - **Tomas HDR (iPhone HLG/PQ):**
   - Se detectan y pasan a SDR BT.709 con la LUT de `cli/luts/`, en paralelo y con caché en `<out>/.hdr-cache`.

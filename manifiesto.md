@@ -125,12 +125,13 @@ El manifiesto guarda nombres/rutas; cada entorno los resuelve distinto:
 ## 6. Render por CLI (el camino rápido)
 
 ```bash
-node cli/render.ts mi-video.json --base ~/Documents/Videos [--out ./salida] [--encoder videotoolbox|x264]
+node cli/render.ts mi-video.json --base ~/Documents/Videos [--out ./salida] [--encoder maxima|videotoolbox|x264]
 ```
 
 - `--base`: carpeta raíz donde buscar los archivos (default: la carpeta del manifiesto).
 - `--out`: carpeta de salida (default: carpeta actual).
-- `--encoder`: default `videotoolbox` en macOS (aceleración por hardware; render en ~tiempo real incluso con fuentes 4K), `x264` en otros sistemas.
+- `--encoder`: default `maxima` (x264 lento CRF 14 + AAC 320k; la entrega final, un solo archivo para todas las redes). `videotoolbox` en macOS es
+  por hardware y en ~tiempo real (pruebas); `x264` es intermedio.
 - Requisitos: Node ≥ 22.18 y `ffmpeg`/`ffprobe` en el PATH (o variables de entorno `FFMPEG`/`FFPROBE`).
 - Renderiza todos los formatos listados en `outputs`, uno por uno, con barra de progreso.
 

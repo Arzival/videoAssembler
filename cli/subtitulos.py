@@ -59,11 +59,34 @@ def corrige(ws):
     """Términos que Whisper escribe mal (cli/subtitulos-diccionario.json: «palabra en minúsculas» → «cómo va»)."""
     dic = os.path.join(AQUI, 'subtitulos-diccionario.json')
     d = json.load(open(dic)) if os.path.exists(dic) else {}
-    for p in ws:
-        m = re.match(r'^([¿¡"«(]*)(.*?)([.,;:?!"»)]*)$', p[0])
-        if m and m.group(2).lower() in d:
+    partes = lambda w: re.match(r'^([¿¡"«(]*)(.*?)([.,;:?!"»)]*)$', w)
+    # frases («johnny homeblog» → «yo en mi homelab»): el tramo de las palabras originales se reparte entre las nuevas
+    frases = sorted((k for k in d if ' ' in k), key=lambda k: -len(k.split()))
+    out, i = [], 0
+    while i < len(ws):
+        for k in frases:
+            seg = ws[i:i + len(k.split())]
+            if len(seg) == len(k.split()) and ' '.join(partes(p[0]).group(2).lower() for p in seg) == k:
+                nuevas = d[k].split()
+                nuevas[0] = partes(seg[0][0]).group(1) + nuevas[0]
+                nuevas[-1] += partes(seg[-1][0]).group(3)
+                a, b = seg[0][1], seg[-1][2]
+                pesos = [len(x) for x in nuevas]
+                t = a
+                for x, w in zip(nuevas, pesos):
+                    dur = (b - a) * w / sum(pesos)
+                    out.append([x, round(t, 3), round(t + dur, 3)])
+                    t += dur
+                i += len(seg)
+                break
+        else:
+            out.append(ws[i])
+            i += 1
+    for p in out:
+        m = partes(p[0])
+        if m and ' ' not in m.group(2) and m.group(2).lower() in d:
             p[0] = m.group(1) + d[m.group(2).lower()] + m.group(3)
-    return ws
+    return out
 
 
 def grupos(ws):

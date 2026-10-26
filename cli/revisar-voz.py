@@ -123,6 +123,20 @@ def revisar(F):
                               corte=[f['x'], F[j]['x']]))
                 fallido = True
                 break
+        if not fallido and i + 1 < len(F) and F[i + 1]['x'] - f['y'] <= 6:
+            # arranque fallido pegado al FINAL de la frase: «…ya hay una despedida. Ark pone tus pestañas y deja…» y la siguiente
+            # vuelve a empezar «Arc pone tus pestañas…» (sin pausa antes del intento, así que queda dentro de la frase anterior)
+            sig = F[i + 1]['w']
+            for L in range(min(len(w) - 1, len(sig), 14), 2, -1):
+                cola = w[-L:]
+                if (difflib.SequenceMatcher(None, cola[0], sig[0]).ratio() > .6
+                        and difflib.SequenceMatcher(None, cola, sig[:L]).ratio() > .75):
+                    pal = f['palabras']
+                    corte = [round(pal[len(w) - L][1], 2), F[i + 1]['x']] if len(pal) == len(w) else None
+                    H.append(dict(tipo='arranque fallido', i=i, motivo=f'termina con un intento de la frase siguiente («{" ".join(cola)}»): '
+                                  'se queda la siguiente', **({'corte': corte} if corte else {})))
+                    fallido = True
+                    break
         if not fallido:
             # toma repetida más adelante (frase casi idéntica)
             for j in range(i + 1, len(F)):

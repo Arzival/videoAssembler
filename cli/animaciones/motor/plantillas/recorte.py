@@ -228,10 +228,18 @@ PANTALLA = {
 }
 
 
+# cualquier plantilla acepta piezas y objetos 3D de más (para escenas ricas sin bajar a «fases»): van en la última fase
+for _p in PANTALLA.values():
+    _p['opc'] = tuple(dict.fromkeys(tuple(_p['opc']) + ('extra', 'objetos_extra', 'css')))
+
+
 def escena_pantalla(e, siguiente=True):
     """Escena a pantalla completa → (start, end, html)."""
     d = e['datos']
     fases, objetos = PANTALLA[e['plantilla']]['f'](d)
+    if d.get('extra'):
+        fases = fases[:-1] + [dict(fases[-1], piezas=list(fases[-1]['piezas']) + list(d['extra']))]
+    objetos = list(objetos) + list(d.get('objetos_extra', []))
     A = K.at(e['inicio'])
     body = ''
     for f in fases:

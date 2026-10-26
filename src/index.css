@@ -893,6 +893,8 @@ kbd {
 
 /* ---- escenas del motor en vivo (iframe escalado al cuadro del video) ---- */
 .html-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
-.html-overlay iframe { border: 0; background: transparent; display: block; }
+/* color-scheme igual al de la escena (normal): si no coincide con el del editor (dark), Chrome pinta el iframe con fondo
+   opaco blanco y las capas transparentes (cabecera, tarjetas) tapan todo */
+.html-overlay iframe { border: 0; background: transparent; display: block; color-scheme: normal; }
 .html-overlay-estado { position: absolute; left: 8px; bottom: 8px; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: rgba(0,0,0,.6); color: #fff; }
 .html-overlay-estado.error { background: #8a1c1c; }

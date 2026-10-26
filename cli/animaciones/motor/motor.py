@@ -20,6 +20,8 @@ AQUI = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, AQUI)
 import tiempos, esquema
 
+ENTRADA = .6   # lo que tarda en entrar la hoja/escena (Recorte: rasga .6 s)
+
 
 def generar(g, escenas, estilo, vdir, base, sufijo='', solo=()):
     """Escenas → HTML + lista de capas (overlays) + lote de captura."""
@@ -34,6 +36,10 @@ def generar(g, escenas, estilo, vdir, base, sufijo='', solo=()):
         if e['plantilla'] in estilo.CAPAS:
             capas.append((pid, *estilo.CAPAS[e['plantilla']]['f'](e, fin)))
         else:
+            # la escena que abre el video ya debe estar en pantalla en el cuadro 0: se arma ENTRADA s antes (su hoja entrando queda
+            # en ese tramo) y la capa se recorta con trimIn; si no, los primeros cuadros muestran el fondo vacío
+            if e['inicio'] <= .01:
+                e = dict(e, inicio=-ENTRADA)
             piezas.append((pid, *estilo.escena_pantalla(e, siguiente=e['fin'] < fin - .01)))
     piezas += capas                      # las capas transparentes (Sígueme, cabecera) van encima de todo
     lote = []
@@ -45,8 +51,8 @@ def generar(g, escenas, estilo, vdir, base, sufijo='', solo=()):
         lote.append(dict(html=h, dur=round(b - a, 2), out=os.path.join(salida, f'{pre}{pid}.webm')))
         print(f'html {pid:18s} {a:7.2f}–{min(b, fin):7.2f}')
     rel = os.path.relpath(salida, base)
-    ovs = [dict(file=f'{rel}/{pre}{pid}.webm', html=f'{rel}/_html/{pid}.html', start=round(a, 2), end=round(min(b, fin), 2), trimIn=0, scale=1,
-                position='center') for pid, a, b, _ in piezas]
+    ovs = [dict(file=f'{rel}/{pre}{pid}.webm', html=f'{rel}/_html/{pid}.html', start=round(max(0, a), 2), end=round(min(b, fin), 2),
+                trimIn=round(max(0, -a), 2), scale=1, position='center') for pid, a, b, _ in piezas]
     return ovs, lote, salida
 
 

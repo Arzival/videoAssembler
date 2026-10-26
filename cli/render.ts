@@ -2,13 +2,14 @@
 /**
  * Renderiza un manifiesto del Video Assembler con ffmpeg nativo.
  *
- *   node cli/render.ts manifiesto.json [--base <dir>] [--out <dir>] [--encoder videotoolbox|x264]
+ *   node cli/render.ts manifiesto.json [--base <dir>] [--out <dir>] [--encoder maxima|videotoolbox|x264]
  *
  * --base    Carpeta raíz donde buscar los archivos del manifiesto (default: carpeta del manifiesto).
  *           Las rutas se resuelven directo contra --base; si no existen, se busca
  *           recursivamente por nombre de archivo.
  * --out     Carpeta de salida (default: carpeta actual).
- * --encoder default: videotoolbox en macOS (aceleración por hardware), x264 en otros.
+ * --encoder default: maxima (x264 lento CRF 14 + AAC 320k: un solo archivo final para todas las redes). videotoolbox = rápido por
+ *           hardware en macOS (pruebas); x264 = intermedio.
  * FFMPEG / FFPROBE: variables de entorno para rutas alternativas de los binarios.
  */
 import { spawn, spawnSync } from 'node:child_process'
@@ -32,7 +33,7 @@ const argv = process.argv.slice(2)
 let manifestPath = ''
 let baseDir = ''
 let outDir = process.cwd()
-let encoder: Encoder = process.platform === 'darwin' ? 'videotoolbox' : 'x264'
+let encoder: Encoder = 'maxima'
 
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i]
@@ -40,10 +41,10 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === '--out') outDir = argv[++i]
   else if (a === '--encoder') {
     const e = argv[++i]
-    if (e !== 'videotoolbox' && e !== 'x264') fail(`Encoder desconocido: ${e}`)
+    if (e !== 'maxima' && e !== 'videotoolbox' && e !== 'x264') fail(`Encoder desconocido: ${e}`)
     encoder = e
   } else if (a === '--help' || a === '-h') {
-    console.log('Uso: node cli/render.ts manifiesto.json [--base <dir>] [--out <dir>] [--encoder videotoolbox|x264]')
+    console.log('Uso: node cli/render.ts manifiesto.json [--base <dir>] [--out <dir>] [--encoder maxima|videotoolbox|x264]')
     process.exit(0)
   } else if (!manifestPath) manifestPath = a
   else fail(`Argumento inesperado: ${a}`)

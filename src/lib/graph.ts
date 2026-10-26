@@ -7,7 +7,7 @@ export const FORMATS: Record<OutputFormat, { w: number; h: number }> = {
 
 export const FPS = 60
 
-export type Encoder = 'videotoolbox' | 'x264' | 'wasm'
+export type Encoder = 'maxima' | 'videotoolbox' | 'x264' | 'wasm'
 
 export interface BuildOptions {
   format: OutputFormat
@@ -210,16 +210,20 @@ export function buildArgs(m: Manifest, o: BuildOptions): string[] {
   }
   args.push('-filter_complex', parts.join(';'), '-map', `[${vLabel}]`, '-map', audioMap)
 
-  if (o.encoder === 'videotoolbox') {
+  if (o.encoder === 'maxima') {
+    // entrega final: la mejor calidad razonable (x264 lento, casi sin pérdida); un solo archivo para todas las redes
+    args.push('-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-profile:v', 'high', '-level:v', '4.2', '-maxrate', '50M', '-bufsize', '100M',
+      '-pix_fmt', 'yuv420p', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709')
+  } else if (o.encoder === 'videotoolbox') {
     // alto bitrate: las redes recomprimen y conviene entregarles la mejor fuente posible
     args.push('-c:v', 'h264_videotoolbox', '-b:v', '20M', '-maxrate', '26M', '-bufsize', '40M', '-profile:v', 'high', '-allow_sw', '1')
   } else if (o.encoder === 'x264') {
-    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-profile:v', 'high')
+    args.push('-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-profile:v', 'high', '-x264-params', 'colorprim=bt709:transfer=bt709:colormatrix=bt709')
   } else {
     args.push('-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23')
   }
   // salida siempre SDR BT.709 (si no, hereda la etiqueta HLG/BT.2020 de las tomas HDR y los reproductores la malinterpretan)
   if (o.encoder !== 'wasm') args.push('-color_primaries', 'bt709', '-color_trc', 'bt709', '-colorspace', 'bt709', '-color_range', 'tv')
-  args.push('-c:a', 'aac', '-b:a', '192k', '-ar', '44100', '-movflags', '+faststart', o.outputName)
+  args.push('-c:a', 'aac', '-b:a', o.encoder === 'maxima' ? '320k' : '192k', '-ar', '44100', '-movflags', '+faststart', o.outputName)
   return args
 }
