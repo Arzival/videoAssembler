@@ -106,11 +106,15 @@ export function CompararPane({ manifests, onManifests, folder, loaded, onClose }
       )
 
       // escenas del motor (HTML) para verlas en vivo
+      // por ruta completa: dos propuestas pueden tener escenas con el mismo nombre (p1-gancho.html) en carpetas distintas
       const htmlRefs = [...new Set(manifests.flatMap((m) => (m.overlays ?? []).filter((o) => o.html).map((o) => o.html as string)))].filter(
-        (r) => !htmlCache.current.has(baseName(r)),
+        (r) => !htmlCache.current.has(r),
       )
       if (htmlRefs.length && folder && (await folderPermission(folder)) === 'granted') {
-        for (const f of await findFilesByName(folder, htmlRefs)) htmlCache.current.set(f.name, URL.createObjectURL(new Blob([await f.text()], { type: 'text/html' })))
+        for (const r of htmlRefs) {
+          const [f] = await findFilesByName(folder, [r])
+          if (f) htmlCache.current.set(r, URL.createObjectURL(new Blob([await f.text()], { type: 'text/html' })))
+        }
       }
       if (!vivo) return
       const con = <T extends { file: string; media: File | null; url: string | null; duration: number }>(x: T): T => {
@@ -130,7 +134,7 @@ export function CompararPane({ manifests, onManifests, folder, loaded, onClose }
           music: m.music ? con(trackFromSpec(m.music)) : null,
           overlays: (m.overlays ?? []).map((o) => {
             const x = con(overlayFromSpec(o))
-            return x.html ? { ...x, htmlUrl: htmlCache.current.get(baseName(x.html)) ?? null } : x
+            return x.html ? { ...x, htmlUrl: htmlCache.current.get(x.html) ?? null } : x
           }),
           total: clips.reduce((t, c) => t + clipOutSeconds(c), 0),
           clipsMudos: clips.map((c) => ({ ...c, keepAudio: false })),
@@ -139,7 +143,7 @@ export function CompararPane({ manifests, onManifests, folder, loaded, onClose }
       setPanels(nuevos)
       setHeads(nuevos.map(() => 0))
       setCargando(false)
-      const conHtml = new Set(manifests.flatMap((m) => (m.overlays ?? []).filter((o) => o.html && htmlCache.current.has(baseName(o.html))).map((o) => o.file)))
+      const conHtml = new Set(manifests.flatMap((m) => (m.overlays ?? []).filter((o) => o.html && htmlCache.current.has(o.html)).map((o) => o.file)))
       setFaltan(refs.filter((r) => !cache.current.has(baseName(r)) && !conHtml.has(r)).map(baseName))
     }
     void cargar()

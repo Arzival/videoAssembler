@@ -102,25 +102,32 @@ export default function App() {
    * de ser legible para el navegador y hay que volver a leerlo.
    */
   /** Escenas HTML del motor: se leen como texto y se sirven al iframe de la vista previa como blob */
+  // clave: la ruta del manifiesto si vino de la carpeta, o el nombre si se soltó a mano
   const htmlFiles = useRef(new Map<string, string>())
-  const attachHtml = async (files: File[]) => {
-    for (const f of files) {
-      const prev = htmlFiles.current.get(f.name)
+  const htmlDe = (ref: string) => htmlFiles.current.get(ref) ?? htmlFiles.current.get(baseName(ref))
+  const attachHtml = async (files: [string, File][]) => {
+    for (const [key, f] of files) {
+      const prev = htmlFiles.current.get(key)
       if (prev) URL.revokeObjectURL(prev)
-      htmlFiles.current.set(f.name, URL.createObjectURL(new Blob([await f.text()], { type: 'text/html' })))
+      htmlFiles.current.set(key, URL.createObjectURL(new Blob([await f.text()], { type: 'text/html' })))
     }
-    setOverlays((prev) => prev.map((o) => (o.html && htmlFiles.current.has(baseName(o.html)) ? { ...o, htmlUrl: htmlFiles.current.get(baseName(o.html)) } : o)))
+    setOverlays((prev) => prev.map((o) => (o.html && htmlDe(o.html) ? { ...o, htmlUrl: htmlDe(o.html) } : o)))
   }
   const resolveHtml = async (refs: string[]) => {
     const handle = folderRef.current
     if (!handle || refs.length === 0 || (await folderPermission(handle)) !== 'granted') return
-    void attachHtml(await findFilesByName(handle, refs))
+    const found: [string, File][] = []
+    for (const r of refs) {
+      const [f] = await findFilesByName(handle, [r])
+      if (f) found.push([r, f])
+    }
+    void attachHtml(found)
   }
 
   const addFiles = (list: FileList | File[] | null, replace = false) => {
     if (!list || list.length === 0) return
     const htmls = Array.from(list).filter((f) => /\.html?$/i.test(f.name))
-    if (htmls.length) void attachHtml(htmls)
+    if (htmls.length) void attachHtml(htmls.map((f) => [f.name, f]))
     list = Array.from(list).filter((f) => !/\.html?$/i.test(f.name))
     if (list.length === 0) return
     const prepared = Array.from(list).map((file) => ({
