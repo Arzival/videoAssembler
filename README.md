@@ -1,5 +1,10 @@
 # Video Assembler
 
+<p align="center">
+  <img src="docs/img/motor-el-log-10.gif" alt="Tres escenas verticales animadas en estilo collage: «Arc se apaga el 22 de dic», «Todo a Dia» y «Te quedan 2 meses»" width="100%">
+  <br><sub>Escenas que el motor generó a partir de un guion JSON anclado a la voz (El Log #10, estilo Recorte).</sub>
+</p>
+
 Editor de video pensado para que **una IA (Claude Code u otro agente) arme los videos** y una persona los revise y apruebe.
 Sirve para videos verticales u horizontales hechos de tomas de cámara, una nota de voz, música y animaciones encima.
 
